@@ -9,6 +9,8 @@ model synthesizes (**birlestirici**).
 deterministic + model-arbitrated validation, bounded retries with strong-
 model escalation, per-call usage logging and USD/token budget valves.
 
+Docs site (Turkish landing): [orkestra-docs-984.pages.dev](https://orkestra-docs-984.pages.dev).
+
 ## Install
 
 ```bash
@@ -111,6 +113,8 @@ deterministik + model-hakemli doğrulama, sınırlı retry + güçlü modele
 yükseltme, çağrı başına kullanım kaydı ve USD/token bütçe vanası.
 Tasarım: [docs/orkestra-mantigi.md](docs/orkestra-mantigi.md).
 
+Tanıtım sitesi: [orkestra-docs-984.pages.dev](https://orkestra-docs-984.pages.dev).
+
 ### Kurulum
 
 ```bash
@@ -135,3 +139,7 @@ dosyaya yazılmaz** — yalnızca anahtarı tutan ortam değişkeninin adı sakl
 Ayrıntılı kılavuzlar: [docs/kurulum.md](docs/kurulum.md) ·
 [docs/provider-ekleme.md](docs/provider-ekleme.md) ·
 [docs/model-ekleme.md](docs/model-ekleme.md)
+
+## License / Lisans
+
+MIT — see [LICENSE](LICENSE).

@@ -8,6 +8,7 @@ version = "0.2.0"
 description = "Open-source LLM provider/model registry and layered agent orchestration CLI (sef -> hamal -> kalfa -> birlestirici)."
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
 authors = [{ name = "ZoriaSoft" }]
 keywords = ["llm", "orchestration", "openai-compatible", "cli"]
 classifiers = [

@@ -11,3 +11,6 @@ dist/
 .venv/
 venv/
 .wrangler/
+.env
+.env.*
+!.env.example
