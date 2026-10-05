@@ -6,6 +6,7 @@ and, for provider tests, a real local mock OpenAI server.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -228,3 +229,103 @@ class TestMisc:
         result = runner.invoke(app, [])
         assert result.exit_code in (0, 2)
         assert "providers" in result.output
+
+
+@pytest.mark.usefixtures("orkestra_home", "api_key_env")
+class TestRunCli:
+    """End-to-end `orkestra run` through the real mock HTTP server."""
+
+    def _seed(self, runner: CliRunner, mock_server: MockOpenAIServer) -> None:
+        assert _add_provider(runner, mock_server.v1_url).exit_code == 0
+        assert (
+            runner.invoke(
+                app, ["models", "add", "brain", "-p", "mock", "-t", "strong"]
+            ).exit_code
+            == 0
+        )
+        assert (
+            runner.invoke(
+                app, ["models", "add", "mule", "-p", "mock", "-t", "cheap"]
+            ).exit_code
+            == 0
+        )
+
+    @staticmethod
+    def _chat_reply(body: dict) -> str:
+        system = body["messages"][0]["content"]
+        if "BIRLESTIRICI" in system:
+            return "synthesis done"
+        if "KALFA" in system:
+            return '{"pass": true, "reasons": []}'
+        if "HAMAL" in system:
+            return '{"value": 42}'
+        if "SEF" in system:
+            return json.dumps(
+                {
+                    "pieces": [
+                        {
+                            "id": "t-1",
+                            "instruction": "double n",
+                            "input": {"n": 21},
+                            "output_schema": {
+                                "type": "object",
+                                "properties": {"value": {"type": "number"}},
+                                "required": ["value"],
+                            },
+                            "acceptance": [],
+                        }
+                    ]
+                }
+            )
+        raise AssertionError("unknown role")
+
+    def test_run_end_to_end(
+        self, runner: CliRunner, mock_server: MockOpenAIServer
+    ) -> None:
+        mock_server.chat_handler = self._chat_reply
+        self._seed(runner, mock_server)
+
+        result = runner.invoke(app, ["run", "double 21", "--json"])
+
+        assert result.exit_code == 0, combined_output(result)
+        report = json.loads(result.output)
+        assert report["status"] == "ok"
+        assert report["result"] == "synthesis done"
+        assert report["pieces"][0]["status"] == "passed"
+        roles = [c["role"] for c in report["usage"]["calls"]]
+        assert roles == ["sef", "hamal", "birlestirici"]
+        # the wire carried a bearer token from the env var
+        assert mock_server.last_headers()["Authorization"].startswith("Bearer ")
+
+    def test_run_human_output(
+        self, runner: CliRunner, mock_server: MockOpenAIServer
+    ) -> None:
+        mock_server.chat_handler = self._chat_reply
+        self._seed(runner, mock_server)
+
+        result = runner.invoke(app, ["run", "double 21"])
+
+        assert result.exit_code == 0, combined_output(result)
+        assert "ok" in result.output
+        assert "t-1" in result.output
+        assert "synthesis done" in result.output
+
+    def test_run_without_models_fails(
+        self, runner: CliRunner, mock_server: MockOpenAIServer
+    ) -> None:
+        self._seed(runner, mock_server)
+        # drop the cheap pool -> EngineError before any call
+        runner.invoke(app, ["models", "remove", "mule"])
+        result = runner.invoke(app, ["run", "task"])
+        assert result.exit_code == 1
+        assert "cheap" in combined_output(result)
+
+    def test_run_budget_zero_exits_nonzero(
+        self, runner: CliRunner, mock_server: MockOpenAIServer
+    ) -> None:
+        mock_server.chat_handler = self._chat_reply
+        self._seed(runner, mock_server)
+        # models lack cost hints -> EngineError explaining the missing hints
+        result = runner.invoke(app, ["run", "task", "--budget", "1.0"])
+        assert result.exit_code == 1
+        assert "cost hints" in combined_output(result)

@@ -48,3 +48,24 @@ class ModelNotFoundError(OrkestraError):
 
 class ApiKeyNotConfiguredError(OrkestraError):
     """The provider references an environment variable that is not set."""
+
+
+class ChatError(OrkestraError):
+    """A chat-completions call failed at the transport or payload level.
+
+    Raised for network failures, HTTP errors, non-JSON responses and
+    responses missing ``choices[0].message.content``.
+    """
+
+
+class EngineError(OrkestraError):
+    """The orchestra engine cannot start or continue.
+
+    Raised for setup problems (no strong/cheap models, budget-hint gaps,
+    an unparseable sef plan). Piece-level failures are reported inside the
+    run report instead of raising.
+    """
+
+
+class BudgetExceededError(EngineError):
+    """The run crossed its USD or token budget; the valve is closed."""

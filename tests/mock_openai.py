@@ -9,6 +9,11 @@ mocking library internals. Behaviour is controlled per test via attributes:
 - ``mode``: ``ok`` | ``bad_json`` | ``wrong_shape`` | ``error`` | ``slow``
 - ``delay_seconds``: extra latency injected before answering
 - ``requests``: captured ``(path, headers)`` pairs for assertions
+- ``chat_handler``: ``fn(request_body) -> str | dict`` serving
+  ``POST */chat/completions``; return a plain string for assistant content or
+  a dict ``{"content": str, "usage": {...}}``. ``None`` -> every POST fails
+  loudly with a 500.
+- ``chat_requests``: captured POST bodies for assertions
 """
 
 from __future__ import annotations
@@ -17,7 +22,7 @@ import json
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import Any, Callable
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -73,6 +78,70 @@ class _Handler(BaseHTTPRequestHandler):
             },
         )
 
+    def do_POST(self) -> None:
+        mock = self.mock
+        length = int(self.headers.get("Content-Length") or 0)
+        raw_body = self.rfile.read(length) if length else b""
+        try:
+            body = json.loads(raw_body) if raw_body else {}
+        except ValueError:
+            body = {"_unparseable": raw_body.decode(errors="replace")}
+        mock.requests.append((self.command, self.path, dict(self.headers)))
+        mock.chat_requests.append(body)
+
+        if mock.delay_seconds:
+            time.sleep(mock.delay_seconds)
+
+        if not self.path.rstrip("/").endswith("/chat/completions"):
+            self._json(404, {"error": {"message": f"no route {self.path}"}})
+            return
+
+        if mock.require_key is not None:
+            expected = f"Bearer {mock.require_key}"
+            if self.headers.get("Authorization") != expected:
+                self._json(401, {"error": {"message": "invalid api key"}})
+                return
+
+        if mock.mode == "error":
+            self._json(500, {"error": {"message": "mock exploded"}})
+            return
+
+        if mock.chat_handler is None:
+            self._json(
+                500,
+                {"error": {"message": "chat_handler not configured on mock"}},
+            )
+            return
+
+        try:
+            reply = mock.chat_handler(body)
+        except Exception as exc:  # surface test-side failures as 500s
+            self._json(500, {"error": {"message": f"chat_handler: {exc!r}"}})
+            return
+
+        if isinstance(reply, str):
+            reply = {"content": reply}
+        content = reply.get("content", "")
+        usage = reply.get(
+            "usage", {"prompt_tokens": 42, "completion_tokens": 17}
+        )
+        self._json(
+            200,
+            {
+                "id": "chatcmpl-mock",
+                "object": "chat.completion",
+                "model": body.get("model", "mock"),
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": content},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": usage,
+            },
+        )
+
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload).encode()
         self.send_response(status)
@@ -90,7 +159,9 @@ class MockOpenAIServer:
         self.require_key: str | None = None
         self.mode: str = "ok"
         self.delay_seconds: float = 0.0
+        self.chat_handler: Callable[[dict[str, Any]], str | dict[str, Any]] | None = None
         self.requests: list[tuple[str, str, dict[str, str]]] = []
+        self.chat_requests: list[dict[str, Any]] = []
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
         self._server.mock = self  # type: ignore[attr-defined]
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)

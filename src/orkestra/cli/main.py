@@ -9,13 +9,15 @@ from orkestra import __version__
 from .config_cmds import config_app
 from .models import models_app
 from .providers import providers_app
+from .run import run_command
 
 app = typer.Typer(
     name="orkestra",
     help=(
-        "Open-source LLM provider/model registry. Phase 1 manages providers "
-        "and models; the layered orchestra engine (sef -> hamal -> kalfa -> "
-        "birlestirici) arrives in Phase 2."
+        "Open-source LLM provider/model registry and layered orchestra "
+        "engine: `orkestra run` decomposes a task (sef, strong model), "
+        "executes pieces on cheap models (hamal pool), validates every "
+        "output (kalfa) and synthesizes the result (birlestirici)."
     ),
     no_args_is_help=True,
     add_completion=False,
@@ -24,6 +26,7 @@ app = typer.Typer(
 app.add_typer(providers_app, name="providers")
 app.add_typer(models_app, name="models")
 app.add_typer(config_app, name="config")
+app.command("run")(run_command)
 
 
 def _version_callback(value: bool) -> None:

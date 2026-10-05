@@ -1,14 +1,13 @@
 # orkestra
 
-Open-source LLM provider/model registry — and the foundation for a layered
-agent orchestra: a strong model decomposes (**sef**), cheap models execute
-micro-tasks in parallel (**hamal**), a validator gates every output
-(**kalfa**), a strong model synthesizes (**birlestirici**).
+Open-source LLM provider/model registry and a layered agent orchestra: a
+strong model decomposes (**sef**), cheap models execute micro-tasks in
+parallel (**hamal**), a validator gates every output (**kalfa**), a strong
+model synthesizes (**birlestirici**).
 
-**Phase 1 (this release):** provider + model registries and the `orkestra`
-CLI. The orchestration engine lands in Phase 2 — the registry is already
-designed for it (`tier: strong|cheap`, `purpose` tags, cost hints, and a
-`resolve()` seam that hands the engine endpoint + model id + API key).
+**Phase 2 (this release):** `orkestra run` executes a task end to end —
+deterministic + model-arbitrated validation, bounded retries with strong-
+model escalation, per-call usage logging and USD/token budget valves.
 
 ## Install
 
@@ -55,6 +54,24 @@ stored** — only the *name* of the env var holding them.
 | `orkestra models list [--tier T] [--purpose P] [--provider P]` | filtered model table |
 | `orkestra models remove NAME` | remove a model |
 | `orkestra config path` / `orkestra config show` | where/how the config is stored |
+| `orkestra run "TASK" [--budget USD] [--token-budget N] [--strong M] [--max-parallel N] [--no-arbitrate] [--json]` | run a task through the orchestra |
+
+## How a run works
+
+```
+task ──▶ SEF (strong)      decomposes into schema-bound micro-tasks
+     ──▶ HAMAL pool (cheap) parallel workers, JSON-schema outputs
+     ──▶ KALFA             deterministic checks (schema, x-from-input
+                            citations) + strong-model arbitration;
+                            retries ≤ max_retries, then escalates
+     ──▶ BIRLESTIRICI      synthesizes *passed* pieces only
+     ──▶ report            status, per-piece verdicts, usage/cost ledger
+```
+
+Every LLM call is metered (model, tokens, estimated cost); `--budget`
+refuses to start without cost hints and stops the run mid-flight when the
+valve closes. See [docs/orkestra-mantigi.md](docs/orkestra-mantigi.md) for
+the full design rationale (Turkish).
 
 ## Layout
 
@@ -62,12 +79,19 @@ stored** — only the *name* of the env var holding them.
 src/orkestra/
   schema.py     # pydantic: ProviderConfig, ModelConfig, OrkestraConfig, Tier, Purpose
   config.py     # ConfigStore — atomic YAML load/save, ORKESTRA_HOME
-  registry.py   # Registry — CRUD + resolve() (the Phase-2 engine seam)
+  registry.py   # Registry — CRUD + resolve() (endpoint + id + key)
   client.py     # OpenAI-compatible probe (GET /v1/models)
+  chat.py       # chat-completions transport + ChatClient protocol
+  plan.py       # MicroTask / SefPlan / KalfaVerdict / PieceResult
+  validate.py   # kalfa stage 1: jsonschema + citation checks
+  prompts.py    # sef/hamal/kalfa/birlestirici prompt builders
+  budget.py     # UsageLedger — per-call metering + USD/token valves
+  engine.py     # Orchestra — run() conducts the four roles
   errors.py     # explicit exception hierarchy
-  cli/          # typer commands: providers, models, config
-tests/          # unit + integration tests incl. a real mock OpenAI server
-docs/           # Turkish guides: kurulum, provider-ekleme, model-ekleme
+  cli/          # typer commands: run, providers, models, config
+tests/          # unit + e2e tests incl. a real mock OpenAI server
+docs/           # Turkish guides: kurulum, provider-ekleme, model-ekleme,
+              #   orkestra-mantigi (engine design)
 ```
 
 Errors are explicit (typed exceptions → red message + non-zero exit); the
@@ -82,8 +106,10 @@ orkestrasının temeli: güçlü model böler (**şef**), ucuz modeller mikro-g�
 paralel yürütür (**hamal**), doğrulayıcı her çıktıyı denetler (**kalfa**),
 güçlü model sentezler (**birleştirici**).
 
-**Faz 1 (bu sürüm):** provider + model registry'leri ve `orkestra` CLI'ı.
-Orkestrasyon motoru Faz 2'de gelir — registry şimdiden ona göre tasarlandı.
+**Faz 2 (bu sürüm):** `orkestra run` bir görevi uçtan uca çalıştırır —
+deterministik + model-hakemli doğrulama, sınırlı retry + güçlü modele
+yükseltme, çağrı başına kullanım kaydı ve USD/token bütçe vanası.
+Tasarım: [docs/orkestra-mantigi.md](docs/orkestra-mantigi.md).
 
 ### Kurulum
 
