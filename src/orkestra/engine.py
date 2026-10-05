@@ -389,7 +389,7 @@ class Orchestra:
             reasons = verdict.reasons
             fix_hint = verdict.fix_hint
 
-        return self._escalate(piece, ledger, attempts, reasons, fix_hint, unchecked)
+        return self._escalate(piece, ledger, attempts, reasons, fix_hint)
 
     def _escalate(
         self,
@@ -398,7 +398,6 @@ class Orchestra:
         attempts: list[Attempt],
         reasons: list[str],
         fix_hint: str | None,
-        unchecked: list[str],
     ) -> PieceResult:
         """Last chance: run the piece once on the strong model."""
         n = len(attempts) + 1

@@ -130,20 +130,20 @@ class UsageLedger:
 
     @property
     def total_prompt_tokens(self) -> int:
-        return sum(r.prompt_tokens for r in self._records)
+        return sum(r.prompt_tokens for r in self.records)
 
     @property
     def total_completion_tokens(self) -> int:
-        return sum(r.completion_tokens for r in self._records)
+        return sum(r.completion_tokens for r in self.records)
 
     @property
     def total_tokens(self) -> int:
-        return self.total_prompt_tokens + self.total_completion_tokens
+        return sum(r.prompt_tokens + r.completion_tokens for r in self.records)
 
     @property
     def total_cost_usd(self) -> float:
         """Sum of known costs; calls without hints contribute 0."""
-        return sum(r.cost_usd or 0.0 for r in self._records)
+        return sum(r.cost_usd or 0.0 for r in self.records)
 
     @property
     def records(self) -> list[UsageRecord]:
