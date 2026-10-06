@@ -9,6 +9,7 @@ directory with ``0700``.
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -96,7 +97,18 @@ class ConfigStore:
             sort_keys=False,
             allow_unicode=True,
         )
-        tmp_path = self.path.with_suffix(".yaml.tmp")
-        tmp_path.write_text(payload, encoding="utf-8")
-        os.chmod(tmp_path, 0o600)
-        os.replace(tmp_path, self.path)
+        # mkstemp: unique name per writer (concurrent CLI invocations must not
+        # share one temp path) and created 0600 from the start (no window in
+        # which the umask could expose the file).
+        fd, tmp_name = tempfile.mkstemp(
+            dir=self._home, prefix=f".{CONFIG_FILENAME}.", suffix=".tmp"
+        )
+        tmp_path = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+            os.chmod(tmp_path, 0o600)
+            os.replace(tmp_path, self.path)
+        except BaseException:
+            tmp_path.unlink(missing_ok=True)
+            raise

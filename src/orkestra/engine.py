@@ -325,9 +325,13 @@ class Orchestra:
                         output=None,
                         error=str(exc),
                     )
-                # EngineError (broken arbiter) and unexpected exceptions
-                # propagate: an infrastructure failure must not masquerade
-                # as a piece failure.
+                except BaseException:
+                    # EngineError (broken arbiter) and unexpected exceptions
+                    # propagate: an infrastructure failure must not masquerade
+                    # as a piece failure. Pieces not yet started are cancelled
+                    # so the doomed run stops spending budget.
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    raise
         return [r for r in results if r is not None]
 
     def _execute_piece(

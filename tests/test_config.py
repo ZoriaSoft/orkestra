@@ -97,3 +97,22 @@ class TestSave:
         store.save(OrkestraConfig())
         leftovers = list(store.home.glob("*.tmp"))
         assert leftovers == []
+
+    def test_concurrent_saves_do_not_collide(self, store: ConfigStore) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(lambda _: store.save(OrkestraConfig()), range(32)))
+        assert store.load() == OrkestraConfig()
+        assert list(store.home.glob("*.tmp")) == []
+
+    def test_failed_replace_cleans_tmp(
+        self, store: ConfigStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def boom(*_: object) -> None:
+            raise OSError("replace failed")
+
+        monkeypatch.setattr("orkestra.config.os.replace", boom)
+        with pytest.raises(OSError):
+            store.save(OrkestraConfig())
+        assert list(store.home.glob("*.tmp")) == []
