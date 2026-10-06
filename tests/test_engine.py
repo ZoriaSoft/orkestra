@@ -435,7 +435,7 @@ class TestArbitration:
         assert piece["status"] == "passed"
         assert piece["unchecked_acceptance"] == ["ozet must mention a price"]
 
-    def test_broken_arbiter_raises_engine_error(self, registry: Registry) -> None:
+    def test_broken_arbiter_reports_failed_with_usage(self, registry: Registry) -> None:
         def handler(resolved, messages):
             role = role_of(messages)
             if role == "sef":
@@ -447,8 +447,12 @@ class TestArbitration:
             return "done"
 
         client = FakeChatClient(handler)
-        with pytest.raises(EngineError, match="kalfa arbiter"):
-            make_orchestra(registry, client).run("task")
+        report = make_orchestra(registry, client).run("task")
+
+        # The run fails loudly, but the report (and the spent budget) survives.
+        assert report["status"] == "failed"
+        assert any("kalfa arbiter" in e for e in report["errors"])
+        assert report["usage"]["calls"]  # sef+hamal+kalfa calls recorded
 
 
 class TestSef:
@@ -473,12 +477,17 @@ class TestSef:
             "content"
         ]
 
-    def test_persistent_bad_plan_raises(self, registry: Registry) -> None:
+    def test_persistent_bad_plan_reports_failed(self, registry: Registry) -> None:
         client = FakeChatClient(lambda resolved, messages: "still garbage")
-        with pytest.raises(EngineError, match="no valid plan"):
-            make_orchestra(registry, client).run("task")
+        report = make_orchestra(registry, client).run("task")
 
-    def test_invalid_output_schema_rejected(self, registry: Registry) -> None:
+        assert report["status"] == "failed"
+        assert any("no valid plan" in e for e in report["errors"])
+        # the two sef attempts are still in the usage report
+        assert len(calls_for(client, "sef")) == 2
+        assert report["usage"]["calls"]
+
+    def test_invalid_output_schema_reports_failed(self, registry: Registry) -> None:
         bad = plan_json(
             [
                 {
@@ -493,10 +502,12 @@ class TestSef:
         client = FakeChatClient(
             lambda resolved, messages: bad if role_of(messages) == "sef" else "x"
         )
-        with pytest.raises(EngineError, match="output_schema"):
-            make_orchestra(registry, client).run("task")
+        report = make_orchestra(registry, client).run("task")
 
-    def test_too_many_pieces_rejected(self, registry: Registry) -> None:
+        assert report["status"] == "failed"
+        assert any("output_schema" in e for e in report["errors"])
+
+    def test_too_many_pieces_reports_failed(self, registry: Registry) -> None:
         many = [
             {
                 "id": f"t-{i}",
@@ -512,8 +523,10 @@ class TestSef:
             return plan_json(many) if role_of(messages) == "sef" else "x"
 
         client = FakeChatClient(handler)
-        with pytest.raises(EngineError, match="pieces"):
-            make_orchestra(registry, client, max_pieces=3).run("task")
+        report = make_orchestra(registry, client, max_pieces=3).run("task")
+
+        assert report["status"] == "failed"
+        assert any("pieces" in e for e in report["errors"])
 
 
 class TestBudget:
@@ -685,3 +698,104 @@ class TestUsageLogging:
         assert report["status"] == "ok"
         assert report["usage"]["totals"]["estimated_calls"] == 4
         assert report["usage"]["totals"]["prompt_tokens"] > 0
+
+
+class TestRegressionFixes:
+    def test_transport_error_rotates_to_next_cheap_model(self, registry: Registry) -> None:
+        """A dead provider must not burn every retry of its pieces."""
+        from orkestra.errors import ChatError
+
+        pieces = [dict(PLAN_TWO["pieces"][0])]
+        replies = iter([ChatError("conn refused"), '{"value": 3}'])
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json(pieces)
+            if role == "hamal":
+                return next(replies)
+            return "done"
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client).run("task")
+
+        assert report["status"] == "ok"
+        hamal_models = [c["model"] for c in calls_for(client, "hamal")]
+        assert len(set(hamal_models)) == 2  # attempt 2 ran on the other mule
+
+    def test_over_budget_usd_reported_when_valve_overshot(self, registry: Registry) -> None:
+        """A single call past the cap shows the overrun amount in the report."""
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json([PLAN_TWO["pieces"][0]])
+            if role == "hamal":
+                # Oversized usage: sef 20 + hamal 4000 tokens > any cheap cap.
+                return {"content": '{"value": 1}', "prompt_tokens": 2000,
+                        "completion_tokens": 2000}
+            return "done"
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(
+            registry, client, budget_usd=0.0001
+        ).run("task")
+
+        assert report["status"] == "budget_exceeded"
+        assert report["usage"]["over_budget_usd"] > 0
+
+    def test_array_typed_schema_is_rejected_then_repaired(self, registry: Registry) -> None:
+        """sef's array-typed schema is a plan bug — repair prompt, then pass."""
+        bad = json.dumps({"pieces": [{
+            "id": "t-1", "instruction": "i", "input": {},
+            "output_schema": {"type": "array"}, "acceptance": [],
+        }]})
+        good = plan_json([PLAN_TWO["pieces"][0]])
+        sef_replies = iter([bad, good])
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return next(sef_replies)
+            if role == "hamal":
+                return '{"value": 1}'
+            return "done"
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client).run("task")
+
+        assert report["status"] == "ok"
+        assert '"object"' in calls_for(client, "sef")[1]["messages"][-1]["content"]
+
+    def test_citation_violations_survive_schema_noise(self, registry: Registry) -> None:
+        """8+ schema errors must not push citation reasons out of the hint."""
+        schema = {
+            "type": "object",
+            "properties": {
+                **{f"f{i}": {"type": "integer"} for i in range(10)},
+                "kaynak": {"type": "string", "x-from-input": "urls"},
+            },
+            "required": [f"f{i}" for i in range(10)] + ["kaynak"],
+        }
+        pieces = [{
+            "id": "t-1", "instruction": "summarize",
+            "input": {"urls": ["https://a"]},
+            "output_schema": schema, "acceptance": [],
+        }]
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json(pieces)
+            if role == "hamal":
+                return json.dumps({"kaynak": "https://not-in-input"})
+            return "done"
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client).run("task")
+
+        piece = report["pieces"][0]
+        assert piece["status"] == "failed"
+        # citation feedback reached the hamal despite the schema flood
+        retry_prompt = calls_for(client, "hamal")[1]["messages"][1]["content"]
+        assert "citation" in retry_prompt

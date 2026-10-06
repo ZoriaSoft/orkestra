@@ -118,15 +118,28 @@ class UsageLedger:
         return entry
 
     def ensure_within_budget(self) -> None:
-        """Raise :class:`BudgetExceededError` when a configured cap is crossed."""
-        if self.budget_usd is not None and self.total_cost_usd >= self.budget_usd:
-            raise BudgetExceededError(
-                f"budget exhausted: ${self.total_cost_usd:.4f} >= ${self.budget_usd:.4f}"
-            )
-        if self.token_budget is not None and self.total_tokens >= self.token_budget:
-            raise BudgetExceededError(
-                f"token budget exhausted: {self.total_tokens} >= {self.token_budget}"
-            )
+        """Raise :class:`BudgetExceededError` when a configured cap is crossed.
+
+        The check runs under the ledger lock so parallel workers cannot race
+        past the valve (check-then-call is still best effort — the call is
+        recorded only after it completes — but no two workers observe the
+        same sub-limit total).
+        """
+        with self._lock:
+            if self.budget_usd is not None:
+                cost = sum(r.cost_usd or 0.0 for r in self._records)
+                if cost >= self.budget_usd:
+                    raise BudgetExceededError(
+                        f"budget exhausted: ${cost:.4f} >= ${self.budget_usd:.4f}"
+                    )
+            if self.token_budget is not None:
+                tokens = sum(
+                    r.prompt_tokens + r.completion_tokens for r in self._records
+                )
+                if tokens >= self.token_budget:
+                    raise BudgetExceededError(
+                        f"token budget exhausted: {tokens} >= {self.token_budget}"
+                    )
 
     @property
     def total_prompt_tokens(self) -> int:
@@ -153,14 +166,21 @@ class UsageLedger:
     def as_report(self) -> dict[str, object]:
         """Usage section of the run report."""
         records = self.records
+        total_cost = self.total_cost_usd
+        over_budget = (
+            round(total_cost - self.budget_usd, 6)
+            if self.budget_usd is not None and total_cost > self.budget_usd
+            else None
+        )
         return {
             "calls": [asdict(r) for r in records],
             "totals": {
                 "prompt_tokens": self.total_prompt_tokens,
                 "completion_tokens": self.total_completion_tokens,
-                "cost_usd": round(self.total_cost_usd, 6),
+                "cost_usd": round(total_cost, 6),
                 "estimated_calls": sum(1 for r in records if r.estimated),
             },
             "budget_usd": self.budget_usd,
             "token_budget": self.token_budget,
+            "over_budget_usd": over_budget,
         }

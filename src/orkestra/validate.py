@@ -22,19 +22,32 @@ from orkestra.plan import MicroTask
 MAX_VIOLATIONS = 8
 """Cap on reported violations so a garbage output doesn't flood the retry hint."""
 
+MAX_SCHEMA_VIOLATIONS = 5
+MAX_CITATION_VIOLATIONS = 3
+
 
 def deterministic_violations(task: MicroTask, output: Any) -> list[str]:
-    """Return human-readable violations; empty list means stage-1 passed."""
+    """Return human-readable violations; empty list means stage-1 passed.
+
+    Schema errors are capped at 5 and citation errors at 3: with a flat cap,
+    a schema-heavy garbage output starved the citation checks out of the
+    retry hint entirely, so the hamal never learned why it failed.
+    """
     violations: list[str] = []
     if not isinstance(output, dict):
         return [f"output must be a JSON object, got {type(output).__name__}"]
 
     validator = jsonschema.Draft202012Validator(task.output_schema)
-    for err in sorted(validator.iter_errors(output), key=lambda e: list(e.absolute_path)):
-        where = ".".join(str(p) for p in err.absolute_path) or "(root)"
-        violations.append(f"schema: {where}: {err.message}")
-
-    violations.extend(_citation_violations(task, output))
+    schema_errors = [
+        f"schema: {'.'.join(str(p) for p in err.absolute_path) or '(root)'}: {err.message}"
+        for err in sorted(
+            validator.iter_errors(output), key=lambda e: list(e.absolute_path)
+        )
+    ]
+    violations.extend(schema_errors[:MAX_SCHEMA_VIOLATIONS])
+    violations.extend(
+        _citation_violations(task, output)[:MAX_CITATION_VIOLATIONS]
+    )
     return violations[:MAX_VIOLATIONS]
 
 

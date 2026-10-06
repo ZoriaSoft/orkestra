@@ -87,11 +87,18 @@ class ConfigStore:
     def save(self, config: OrkestraConfig) -> None:
         """Persist the config atomically with restrictive permissions.
 
+        The home directory's mode is forced to 0700 only when *this* call
+        creates it (a shared ORKESTRA_HOME must not have its owner's
+        permissions silently rewritten). The payload is fsynced before the
+        atomic replace so a crash cannot leave a truncated file behind.
+
         Args:
             config: the registry state to write.
         """
+        existed = self._home.exists()
         self._home.mkdir(parents=True, exist_ok=True)
-        os.chmod(self._home, 0o700)
+        if not existed:
+            os.chmod(self._home, 0o700)
         payload = yaml.safe_dump(
             config.model_dump(mode="json"),
             sort_keys=False,
@@ -107,6 +114,8 @@ class ConfigStore:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
             os.chmod(tmp_path, 0o600)
             os.replace(tmp_path, self.path)
         except BaseException:

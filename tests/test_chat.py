@@ -151,3 +151,43 @@ class TestEstimateTokens:
     def test_estimate(self) -> None:
         assert estimate_tokens("") == 1
         assert estimate_tokens("abcd" * 10) == 10
+
+
+class TestMaxCompletionTokensFallback:
+    def test_max_tokens_400_falls_back_to_max_completion_tokens(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Reasoning-family 400 on max_tokens -> retry with modern field."""
+        import httpx
+
+        seen: list[dict] = []
+
+        class _Reject:
+            status_code = 400
+            text = ("Unsupported parameter: 'max_tokens' is not supported "
+                    "with this model. Use 'max_completion_tokens' instead.")
+
+        class _Ok:
+            status_code = 200
+            text = "{}"
+
+            def json(self) -> dict:
+                return {
+                    "choices": [{"message": {"content": "ok"}}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+                }
+
+        def fake_post(url, json=None, **kwargs):
+            seen.append(json)
+            return _Reject() if "max_tokens" in json else _Ok()
+
+        monkeypatch.setattr(httpx, "post", fake_post)
+        provider = ProviderConfig(name="p", base_url="http://127.0.0.1:1/v1")
+        response = HttpChatClient().complete(
+            _resolved(provider), [{"role": "user", "content": "hi"}],
+            max_tokens=128,
+        )
+        assert response.content == "ok"
+        assert len(seen) == 2  # retry happened
+        assert "max_tokens" not in seen[-1]
+        assert seen[-1]["max_completion_tokens"] == 128

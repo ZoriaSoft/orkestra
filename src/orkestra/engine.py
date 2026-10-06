@@ -122,9 +122,11 @@ class Orchestra:
         """Execute ``task`` through the full pipeline; return a report dict.
 
         Raises:
-            EngineError: the run cannot start (no plan after retry) or a
-                strong-tier call dies both attempts.
             OrkestraError: setup failures surfaced from the registry.
+
+        A failed sef or a broken arbiter no longer raises: the run returns a
+        ``failed`` report with the pieces completed so far and the full
+        usage ledger, so spent budget is never lost from the report.
         """
         ledger = UsageLedger(
             budget_usd=self._budget_usd, token_budget=self._token_budget
@@ -139,8 +141,13 @@ class Orchestra:
             return self._report(
                 task, run_id, "budget_exceeded", None, [], ledger, [str(exc)]
             )
+        except EngineError as exc:
+            # No usable plan: still report what the sef attempts spent.
+            return self._report(task, run_id, "failed", None, [], ledger, [str(exc)])
 
-        results = self._execute_all(plan.pieces, ledger)
+        results, abort_error = self._execute_all(plan.pieces, ledger)
+        if abort_error is not None:
+            errors.append(str(abort_error))
 
         budget_hit = self._budget_hit(ledger)
         if not budget_hit and any(r.ok for r in results):
@@ -299,16 +306,24 @@ class Orchestra:
 
     def _execute_all(
         self, pieces: list[MicroTask], ledger: UsageLedger
-    ) -> list[PieceResult]:
-        """Run pieces in parallel over the cheap pool; order is preserved."""
+    ) -> tuple[list[PieceResult], EngineError | None]:
+        """Run pieces in parallel over the cheap pool; order is preserved.
+
+        An infrastructure failure (a broken arbiter, an unexpected exception)
+        does not discard the run: pending pieces are cancelled, completed
+        results are kept and the error is returned so the caller can emit a
+        partial report with the full usage ledger. In-flight HTTP calls are
+        not interruptible, but no *new* pieces start after the abort.
+        """
         results: list[PieceResult | None] = [None] * len(pieces)
+        abort: EngineError | None = None
         workers = min(self._max_parallel, len(pieces))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
                 pool.submit(
                     self._execute_piece,
                     piece,
-                    self._cheap[i % len(self._cheap)],
+                    i,
                     ledger,
                 ): i
                 for i, piece in enumerate(pieces)
@@ -325,28 +340,44 @@ class Orchestra:
                         output=None,
                         error=str(exc),
                     )
-                except BaseException:
-                    # EngineError (broken arbiter) and unexpected exceptions
-                    # propagate: an infrastructure failure must not masquerade
-                    # as a piece failure. Pieces not yet started are cancelled
-                    # so the doomed run stops spending budget.
+                except EngineError as exc:
+                    if abort is None:
+                        abort = exc
+                    results[index] = PieceResult(
+                        task=piece,
+                        status=PieceStatus.FAILED,
+                        output=None,
+                        error=str(exc),
+                    )
                     pool.shutdown(wait=False, cancel_futures=True)
-                    raise
-        return [r for r in results if r is not None]
+                except BaseException as exc:
+                    # Unexpected infrastructure failure: keep it loud, but
+                    # still return the partial results + ledger to the caller.
+                    if abort is None:
+                        abort = EngineError(f"run aborted: {exc}")
+                    pool.shutdown(wait=False, cancel_futures=True)
+        return [r for r in results if r is not None], abort
 
     def _execute_piece(
         self,
         piece: MicroTask,
-        cheap: ResolvedModel,
+        pool_index: int,
         ledger: UsageLedger,
     ) -> PieceResult:
-        """hamal attempt(s) + kalfa verdict; escalate to strong on exhaustion."""
+        """hamal attempt(s) + kalfa verdict; escalate to strong on exhaustion.
+
+        On a transport error the next cheap model in the pool takes over
+        (round-robin from the piece's start slot), so one dead provider
+        does not burn every retry of every piece it was assigned.
+        """
         attempts: list[Attempt] = []
         fix_hint: str | None = None
         reasons: list[str] = []
         unchecked: list[str] = []
+        slot = pool_index
 
         for n in range(1, piece.max_retries + 2):
+            cheap = self._cheap[slot % len(self._cheap)]
             try:
                 response = self._call_llm(
                     "hamal",
@@ -365,6 +396,9 @@ class Orchestra:
                 attempts.append(
                     Attempt(n, cheap.model.name, "cheap", False, list(reasons))
                 )
+                # Transport failure looks like provider trouble, not the
+                # model's output quality: rotate to the next cheap model.
+                slot += 1
                 continue
             try:
                 output = parse_json_object(

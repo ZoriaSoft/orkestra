@@ -48,8 +48,14 @@ class MicroTask(BaseModel):
     @field_validator("output_schema")
     @classmethod
     def _schema_is_object_typed(cls, value: dict[str, Any]) -> dict[str, Any]:
-        if not isinstance(value.get("type"), str):
-            raise ValueError("output_schema must declare a 'type'")
+        # The hamal transport always parses replies into a dict, so a schema
+        # typed as anything else (e.g. "array") can never pass — reject it at
+        # plan time, where the sef can still repair the plan.
+        if value.get("type") != "object":
+            raise ValueError(
+                "output_schema must declare \"type\": \"object\" "
+                "(worker replies are JSON objects)"
+            )
         return value
 
 

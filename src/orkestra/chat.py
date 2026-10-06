@@ -106,6 +106,10 @@ class HttpChatClient:
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
         if max_tokens is not None:
+            # Reasoning-family models (o1/o3/gpt-5 …) reject ``max_tokens``
+            # with HTTP 400 and require ``max_completion_tokens``. Try the
+            # legacy field first; on an explicit "unsupported parameter"
+            # 400, retry once with the modern field.
             payload["max_tokens"] = max_tokens
         if temperature is not None:
             payload["temperature"] = temperature
@@ -123,6 +127,21 @@ class HttpChatClient:
                 headers=headers,
                 timeout=provider.timeout_seconds,
             )
+            if (
+                response.status_code == 400
+                and "max_tokens" in payload
+                and "max_completion_tokens" not in payload
+                and "unsupported parameter" in response.text.lower()
+            ):
+                # Reasoning-family models (o1/o3/gpt-5 …) reject max_tokens;
+                # swap to the modern field and retry once.
+                payload["max_completion_tokens"] = payload.pop("max_tokens")
+                response = httpx.post(
+                    url,
+                    json=payload,
+                    headers=headers,
+                    timeout=provider.timeout_seconds,
+                )
         except httpx.HTTPError as exc:
             raise ChatError(
                 f"{provider.name}: chat completion failed: "
