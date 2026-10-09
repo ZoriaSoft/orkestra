@@ -27,9 +27,13 @@ def _add_provider(
     return runner.invoke(
         app,
         [
-            "providers", "add", name,
-            "--base-url", base_url,
-            "--api-key-env", TEST_KEY_ENV,
+            "providers",
+            "add",
+            name,
+            "--base-url",
+            base_url,
+            "--api-key-env",
+            TEST_KEY_ENV,
             *extra,
         ],
     )
@@ -37,7 +41,9 @@ def _add_provider(
 
 @pytest.mark.usefixtures("orkestra_home")
 class TestProvidersCli:
-    def test_add_and_list(self, runner: CliRunner, mock_server: MockOpenAIServer) -> None:
+    def test_add_and_list(
+        self, runner: CliRunner, mock_server: MockOpenAIServer
+    ) -> None:
         result = _add_provider(runner, mock_server.v1_url)
         assert result.exit_code == 0, result.output
         assert "added" in result.output
@@ -116,9 +122,7 @@ class TestProvidersCli:
         assert result.exit_code == 1
         assert "not found" in combined_output(result)
 
-    def test_remove(
-        self, runner: CliRunner, mock_server: MockOpenAIServer
-    ) -> None:
+    def test_remove(self, runner: CliRunner, mock_server: MockOpenAIServer) -> None:
         _add_provider(runner, mock_server.base_url)
         result = runner.invoke(app, ["providers", "remove", "mock"])
         assert result.exit_code == 0
@@ -150,12 +154,19 @@ class TestModelsCli:
         result = runner.invoke(
             app,
             [
-                "models", "add", "hamal-1",
-                "--provider", "mock",
-                "--tier", "cheap",
-                "--purpose", "micro-task",
-                "--cost-in", "0.10",
-                "--cost-out", "0.40",
+                "models",
+                "add",
+                "hamal-1",
+                "--provider",
+                "mock",
+                "--tier",
+                "cheap",
+                "--purpose",
+                "micro-task",
+                "--cost-in",
+                "0.10",
+                "--cost-out",
+                "0.40",
             ],
         )
         assert result.exit_code == 0, combined_output(result)
@@ -184,9 +195,7 @@ class TestModelsCli:
         assert result.exit_code == 1
         assert "not found" in combined_output(result)
 
-    def test_remove(
-        self, runner: CliRunner, mock_server: MockOpenAIServer
-    ) -> None:
+    def test_remove(self, runner: CliRunner, mock_server: MockOpenAIServer) -> None:
         self._seed_provider(runner, mock_server)
         runner.invoke(app, ["models", "add", "m1", "-p", "mock", "-t", "cheap"])
         result = runner.invoke(app, ["models", "remove", "m1"])
@@ -331,8 +340,14 @@ class TestRunCli:
         assert "cost hints" in combined_output(result)
 
     @pytest.mark.parametrize(
-        "flag", [["--budget", "0"], ["--budget", "-1.5"], ["--token-budget", "0"],
-                 ["--token-budget", "-3"], ["--max-parallel", "0"]]
+        "flag",
+        [
+            ["--budget", "0"],
+            ["--budget", "-1.5"],
+            ["--token-budget", "0"],
+            ["--token-budget", "-3"],
+            ["--max-parallel", "0"],
+        ],
     )
     def test_run_rejects_nonpositive_limits(
         self, runner: CliRunner, flag: list[str]

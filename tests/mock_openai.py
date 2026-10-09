@@ -123,9 +123,7 @@ class _Handler(BaseHTTPRequestHandler):
         if isinstance(reply, str):
             reply = {"content": reply}
         content = reply.get("content", "")
-        usage = reply.get(
-            "usage", {"prompt_tokens": 42, "completion_tokens": 17}
-        )
+        usage = reply.get("usage", {"prompt_tokens": 42, "completion_tokens": 17})
         self._json(
             200,
             {
@@ -160,7 +158,9 @@ class MockOpenAIServer:
         self.require_key: str | None = None
         self.mode: str = "ok"
         self.delay_seconds: float = 0.0
-        self.chat_handler: Callable[[dict[str, Any]], str | dict[str, Any]] | None = None
+        self.chat_handler: Callable[[dict[str, Any]], str | dict[str, Any]] | None = (
+            None
+        )
         self.requests: list[tuple[str, str, dict[str, str]]] = []
         self.chat_requests: list[dict[str, Any]] = []
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)

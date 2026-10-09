@@ -20,7 +20,9 @@ from .mock_openai import MockOpenAIServer
 
 def _resolved(provider: ProviderConfig, model_name: str = "m") -> ResolvedModel:
     model = ModelConfig(name=model_name, provider=provider.name, tier=Tier.CHEAP)
-    return ResolvedModel(model=model, provider=provider, model_id=model_name, api_key=None)
+    return ResolvedModel(
+        model=model, provider=provider, model_id=model_name, api_key=None
+    )
 
 
 class TestChatCompletionsUrl:
@@ -38,7 +40,9 @@ class TestChatCompletionsUrl:
 
 
 class TestHttpChatClient:
-    def test_success_returns_content_and_usage(self, mock_server: MockOpenAIServer) -> None:
+    def test_success_returns_content_and_usage(
+        self, mock_server: MockOpenAIServer
+    ) -> None:
         mock_server.chat_handler = lambda body: {
             "content": '{"ok": true}',
             "usage": {"prompt_tokens": 11, "completion_tokens": 7},
@@ -74,11 +78,12 @@ class TestHttpChatClient:
             model_id="m",
             api_key=TEST_KEY_VALUE,
         )
-        resp = HttpChatClient().complete(
-            resolved, [{"role": "user", "content": "hi"}]
-        )
+        resp = HttpChatClient().complete(resolved, [{"role": "user", "content": "hi"}])
         assert resp.content == "hello"
-        assert mock_server.last_headers().get("Authorization") == f"Bearer {TEST_KEY_VALUE}"
+        assert (
+            mock_server.last_headers().get("Authorization")
+            == f"Bearer {TEST_KEY_VALUE}"
+        )
 
     def test_http_error_raises_chat_error(self, mock_server: MockOpenAIServer) -> None:
         mock_server.mode = "error"
@@ -170,8 +175,10 @@ class TestMaxCompletionTokensFallback:
 
         class _Reject:
             status_code = 400
-            text = ("Unsupported parameter: 'max_tokens' is not supported "
-                    "with this model. Use 'max_completion_tokens' instead.")
+            text = (
+                "Unsupported parameter: 'max_tokens' is not supported "
+                "with this model. Use 'max_completion_tokens' instead."
+            )
 
         class _Ok:
             status_code = 200
@@ -190,7 +197,8 @@ class TestMaxCompletionTokensFallback:
         monkeypatch.setattr(httpx, "post", fake_post)
         provider = ProviderConfig(name="p", base_url="http://127.0.0.1:1/v1")
         response = HttpChatClient().complete(
-            _resolved(provider), [{"role": "user", "content": "hi"}],
+            _resolved(provider),
+            [{"role": "user", "content": "hi"}],
             max_tokens=128,
         )
         assert response.content == "ok"

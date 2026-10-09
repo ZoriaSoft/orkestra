@@ -21,7 +21,7 @@ cd orkestra
 pip install -e .
 ```
 
-Python 3.11+. Dev extras: `pip install -e ".[dev]"` then `pytest`.
+Python 3.11+. Dev extras: `pip install -e ".[dev]"` then `pytest`, `ruff check .`, `ruff format --check .`.
 
 ## 5-minute quickstart
 
@@ -123,7 +123,7 @@ Tanıtım sitesi: [orkestra-docs-984.pages.dev](https://orkestra-docs-984.pages.
 pip install -e .
 ```
 
-Python 3.11+. Geliştirme için: `pip install -e ".[dev]"` ardından `pytest`.
+Python 3.11+. Geliştirme için: `pip install -e ".[dev]"` ardından `pytest`, `ruff check .`, `ruff format --check .`.
 
 ### Hızlı başlangıç
 

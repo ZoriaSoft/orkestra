@@ -19,10 +19,14 @@ from .conftest import TEST_KEY_ENV, TEST_KEY_VALUE
 
 
 def _provider(name: str = "p1") -> ProviderConfig:
-    return ProviderConfig(name=name, base_url="https://h.test", api_key_env=TEST_KEY_ENV)
+    return ProviderConfig(
+        name=name, base_url="https://h.test", api_key_env=TEST_KEY_ENV
+    )
 
 
-def _model(name: str = "m1", provider: str = "p1", tier: Tier = Tier.CHEAP) -> ModelConfig:
+def _model(
+    name: str = "m1", provider: str = "p1", tier: Tier = Tier.CHEAP
+) -> ModelConfig:
     return ModelConfig(name=name, provider=provider, tier=tier)
 
 

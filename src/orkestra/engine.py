@@ -284,8 +284,7 @@ class Orchestra:
             else:
                 if len(plan.pieces) > self._max_pieces:
                     last_error = (
-                        f"plan has {len(plan.pieces)} pieces, "
-                        f"max is {self._max_pieces}"
+                        f"plan has {len(plan.pieces)} pieces, max is {self._max_pieces}"
                     )
                 elif (bad := _first_invalid_schema(plan)) is not None:
                     last_error = bad
@@ -445,9 +444,7 @@ class Orchestra:
                 response = self._call_llm(
                     "hamal",
                     cheap,
-                    hamal_messages(
-                        piece, fix_hint=fix_hint, previous_reasons=reasons
-                    ),
+                    hamal_messages(piece, fix_hint=fix_hint, previous_reasons=reasons),
                     ledger,
                     piece_id=piece.id,
                     attempt=n,
@@ -464,9 +461,7 @@ class Orchestra:
                 slot += 1
                 continue
             try:
-                output = parse_json_object(
-                    response.content, who=f"hamal[{piece.id}]"
-                )
+                output = parse_json_object(response.content, who=f"hamal[{piece.id}]")
             except ValueError as exc:
                 reasons = [str(exc)]
                 fix_hint = "reply with a single JSON object matching output_schema"
@@ -518,9 +513,13 @@ class Orchestra:
                 json_mode=True,
                 max_tokens=piece.budget_tokens,
             )
-            output = parse_json_object(response.content, who=f"hamal[{piece.id}]+strong")
+            output = parse_json_object(
+                response.content, who=f"hamal[{piece.id}]+strong"
+            )
         except (ChatError, ValueError) as exc:
-            attempts.append(Attempt(n, self._strong.model.name, "strong", False, [str(exc)]))
+            attempts.append(
+                Attempt(n, self._strong.model.name, "strong", False, [str(exc)])
+            )
             return PieceResult(
                 task=piece,
                 status=PieceStatus.FAILED,
@@ -533,7 +532,9 @@ class Orchestra:
             return self._cancelled(piece, attempts)
         verdict, unchecked = self._validate(piece, output, ledger, n)
         attempts.append(
-            Attempt(n, self._strong.model.name, "strong", verdict.passed, verdict.reasons)
+            Attempt(
+                n, self._strong.model.name, "strong", verdict.passed, verdict.reasons
+            )
         )
         if verdict.passed:
             return PieceResult(
@@ -571,9 +572,7 @@ class Orchestra:
         violations = deterministic_violations(piece, output)
         if violations:
             return (
-                KalfaVerdict(
-                    passed=False, reasons=violations, fix_hint=violations[0]
-                ),
+                KalfaVerdict(passed=False, reasons=violations, fix_hint=violations[0]),
                 [],
             )
         if not piece.acceptance:
@@ -622,9 +621,7 @@ class Orchestra:
                         ),
                     },
                 ]
-        raise EngineError(
-            f"kalfa arbiter failed for piece {piece.id!r}: {last_error}"
-        )
+        raise EngineError(f"kalfa arbiter failed for piece {piece.id!r}: {last_error}")
 
     # ------------------------------------------------------------------
     # birlestirici

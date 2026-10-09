@@ -48,9 +48,7 @@ def deterministic_violations(task: MicroTask, output: Any) -> list[str]:
         )
     ]
     violations.extend(schema_errors[:MAX_SCHEMA_VIOLATIONS])
-    violations.extend(
-        _citation_violations(task, output)[:MAX_CITATION_VIOLATIONS]
-    )
+    violations.extend(_citation_violations(task, output)[:MAX_CITATION_VIOLATIONS])
     return violations[:MAX_VIOLATIONS]
 
 

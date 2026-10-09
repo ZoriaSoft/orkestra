@@ -41,7 +41,10 @@ class TestProbe:
         self, mock_server: MockOpenAIServer, mock_provider: ProviderConfig
     ) -> None:
         probe_provider(mock_provider, TEST_KEY_VALUE)
-        assert mock_server.last_headers().get("Authorization") == f"Bearer {TEST_KEY_VALUE}"
+        assert (
+            mock_server.last_headers().get("Authorization")
+            == f"Bearer {TEST_KEY_VALUE}"
+        )
 
     def test_wrong_key_gets_401(
         self, mock_server: MockOpenAIServer, mock_provider: ProviderConfig

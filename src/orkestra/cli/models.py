@@ -76,9 +76,7 @@ def add(
 @models_app.command("list")
 @command_guard
 def list_models(
-    tier: Tier | None = typer.Option(
-        None, "--tier", "-t", help="Filter by tier."
-    ),
+    tier: Tier | None = typer.Option(None, "--tier", "-t", help="Filter by tier."),
     purpose: Purpose | None = typer.Option(
         None, "--purpose", help="Filter by purpose."
     ),

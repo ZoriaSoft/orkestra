@@ -33,12 +33,12 @@ class TestBaseUrl:
     @pytest.mark.parametrize(
         "raw",
         [
-            "ftp://host",            # wrong scheme
-            "api.openai.com",        # no scheme
-            "https://",              # no host
-            "https://host/x?q=1",    # query string
-            "https://host/x#frag",   # fragment
-            "",                      # empty
+            "ftp://host",  # wrong scheme
+            "api.openai.com",  # no scheme
+            "https://",  # no host
+            "https://host/x?q=1",  # query string
+            "https://host/x#frag",  # fragment
+            "",  # empty
         ],
     )
     def test_invalid_urls_rejected(self, raw: str) -> None:
@@ -71,7 +71,9 @@ class TestProviderConfig:
     def test_extra_field_rejected(self) -> None:
         with pytest.raises(PydanticValidationError):
             ProviderConfig(
-                name="p", base_url="https://h.test", api_key_value="oops"  # type: ignore[call-arg]
+                name="p",
+                base_url="https://h.test",
+                api_key_value="oops",  # type: ignore[call-arg]
             )
 
     def test_timeout_bounds(self) -> None:

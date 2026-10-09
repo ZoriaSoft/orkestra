@@ -96,7 +96,9 @@ class UsageLedger:
         Returns the stored :class:`UsageRecord`.
         """
         estimated = prompt_tokens is None or completion_tokens is None
-        p_tok = prompt_tokens if prompt_tokens is not None else estimate_tokens(prompt_text)
+        p_tok = (
+            prompt_tokens if prompt_tokens is not None else estimate_tokens(prompt_text)
+        )
         c_tok = (
             completion_tokens
             if completion_tokens is not None

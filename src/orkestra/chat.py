@@ -144,17 +144,14 @@ class HttpChatClient:
                 )
         except httpx.HTTPError as exc:
             raise ChatError(
-                f"{provider.name}: chat completion failed: "
-                f"{type(exc).__name__}: {exc}"
+                f"{provider.name}: chat completion failed: {type(exc).__name__}: {exc}"
             ) from exc
         latency_ms = (time.monotonic() - start) * 1000.0
 
         if response.status_code >= 400:
             snippet = response.text[:200].strip()
             detail = f": {snippet}" if snippet else ""
-            raise ChatError(
-                f"{provider.name}: HTTP {response.status_code}{detail}"
-            )
+            raise ChatError(f"{provider.name}: HTTP {response.status_code}{detail}")
 
         try:
             body: dict[str, Any] = response.json()

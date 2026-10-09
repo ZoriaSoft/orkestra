@@ -29,7 +29,10 @@ _STATUS_STYLE = {
 def run_command(
     task: str = typer.Argument(..., help="The task to orchestrate."),
     budget: float | None = typer.Option(
-        None, "--budget", "-b", help="USD budget valve; needs cost hints on every model."
+        None,
+        "--budget",
+        "-b",
+        help="USD budget valve; needs cost hints on every model.",
     ),
     token_budget: int | None = typer.Option(
         None, "--token-budget", help="Total token budget across the run."
@@ -94,9 +97,16 @@ def _render(report: dict[str, Any]) -> None:
     table.add_column("models")
     table.add_column("error", overflow="fold")
     for piece in report["pieces"]:
-        status_style = "green" if piece["status"] == "passed" else (
-            "cyan" if piece["status"] == "escalated"
-            else "yellow" if piece["status"] == "cancelled" else "red"
+        status_style = (
+            "green"
+            if piece["status"] == "passed"
+            else (
+                "cyan"
+                if piece["status"] == "escalated"
+                else "yellow"
+                if piece["status"] == "cancelled"
+                else "red"
+            )
         )
         table.add_row(
             piece["id"],

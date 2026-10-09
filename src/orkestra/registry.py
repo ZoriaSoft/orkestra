@@ -93,7 +93,9 @@ class Registry:
             ProviderInUseError: registered models still reference it.
         """
         self.get_provider(name)
-        users = sorted(m.name for m in self._config.models.values() if m.provider == name)
+        users = sorted(
+            m.name for m in self._config.models.values() if m.provider == name
+        )
         if users:
             raise ProviderInUseError(
                 f"provider {name!r} is used by models: {', '.join(users)}; remove them first"

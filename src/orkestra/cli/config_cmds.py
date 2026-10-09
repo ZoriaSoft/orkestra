@@ -23,7 +23,9 @@ def path() -> None:
     """Print the active config file path (honours ORKESTRA_HOME)."""
     store = ConfigStore()
     state = "exists" if store.exists() else "will be created on first write"
-    console.print(f"{store.path}  [dim]({state}; override home with {HOME_ENV_VAR})[/dim]")
+    console.print(
+        f"{store.path}  [dim]({state}; override home with {HOME_ENV_VAR})[/dim]"
+    )
 
 
 @config_app.command("show")

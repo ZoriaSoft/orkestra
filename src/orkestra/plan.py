@@ -53,7 +53,7 @@ class MicroTask(BaseModel):
         # plan time, where the sef can still repair the plan.
         if value.get("type") != "object":
             raise ValueError(
-                "output_schema must declare \"type\": \"object\" "
+                'output_schema must declare "type": "object" '
                 "(worker replies are JSON objects)"
             )
         return value

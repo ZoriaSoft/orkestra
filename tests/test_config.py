@@ -14,7 +14,9 @@ from orkestra.schema import OrkestraConfig, ProviderConfig
 
 
 class TestDefaultHome:
-    def test_env_override(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_env_override(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         monkeypatch.setenv(HOME_ENV_VAR, str(tmp_path / "custom"))
         assert default_home() == tmp_path / "custom"
 
@@ -48,9 +50,7 @@ class TestLoad:
 
     def test_schema_violation_raises(self, store: ConfigStore) -> None:
         store.home.mkdir(parents=True)
-        store.path.write_text(
-            "providers:\n  p:\n    base_url: 'not-a-url'\n"
-        )
+        store.path.write_text("providers:\n  p:\n    base_url: 'not-a-url'\n")
         with pytest.raises(ConfigError, match="invalid config"):
             store.load()
 

@@ -78,7 +78,9 @@ class ConfigStore:
         if raw is None:
             return OrkestraConfig()
         if not isinstance(raw, dict):
-            raise ConfigError(f"{self.path}: top level must be a mapping, got {type(raw).__name__}")
+            raise ConfigError(
+                f"{self.path}: top level must be a mapping, got {type(raw).__name__}"
+            )
         try:
             return OrkestraConfig.model_validate(raw)
         except PydanticValidationError as exc:

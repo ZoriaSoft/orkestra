@@ -40,7 +40,9 @@ class FakeChatClient:
         self.calls: list[Call] = []
         self._lock = threading.Lock()
 
-    def complete(self, resolved, messages, *, json_mode=False, max_tokens=None, temperature=None):
+    def complete(
+        self, resolved, messages, *, json_mode=False, max_tokens=None, temperature=None
+    ):
         with self._lock:
             self.calls.append(
                 {
@@ -169,7 +171,10 @@ class TestHappyPath:
         # 1 sef + 2 hamal + 1 birlestirici; no kalfa (empty acceptance)
         assert len(report["usage"]["calls"]) == 4
         assert [c["role"] for c in report["usage"]["calls"]] == [
-            "sef", "hamal", "hamal", "birlestirici"
+            "sef",
+            "hamal",
+            "hamal",
+            "birlestirici",
         ]
 
     def test_pieces_spread_over_cheap_pool(self, registry: Registry) -> None:
@@ -267,7 +272,10 @@ class TestKalfaRetry:
         assert piece["status"] == "escalated"
         # 1 initial + 2 retries on cheap, then 1 escalated attempt
         assert [a["tier"] for a in piece["attempts"]] == [
-            "cheap", "cheap", "cheap", "strong"
+            "cheap",
+            "cheap",
+            "cheap",
+            "strong",
         ]
         assert piece["attempts"][-1]["model"] == "brain"
         assert report["status"] == "ok"
@@ -312,8 +320,10 @@ class TestKalfaRetry:
         piece = report["pieces"][0]
         assert piece["status"] == "passed"
         assert len(piece["attempts"]) == 2
-        assert "not valid JSON" in piece["attempts"][0]["reasons"][0] or \
-            "no JSON object" in piece["attempts"][0]["reasons"][0]
+        assert (
+            "not valid JSON" in piece["attempts"][0]["reasons"][0]
+            or "no JSON object" in piece["attempts"][0]["reasons"][0]
+        )
 
     def test_transport_error_is_a_failed_attempt(self, registry: Registry) -> None:
         from orkestra.errors import ChatError
@@ -415,9 +425,10 @@ class TestArbitration:
         piece = report["pieces"][0]
         assert len(piece["attempts"]) == 2
         # the fix_hint travelled back into the hamal retry
-        assert "include the price" in calls_for(client, "hamal")[1]["messages"][1][
-            "content"
-        ]
+        assert (
+            "include the price"
+            in calls_for(client, "hamal")[1]["messages"][1]["content"]
+        )
 
     def test_no_arbitrate_marks_unchecked(self, registry: Registry) -> None:
         def handler(resolved, messages):
@@ -474,9 +485,9 @@ class TestSef:
         assert report["status"] == "ok"
         assert len(calls_for(client, "sef")) == 2
         # the retry told the sef what was wrong
-        assert "not a valid plan" in calls_for(client, "sef")[1]["messages"][-1][
-            "content"
-        ]
+        assert (
+            "not a valid plan" in calls_for(client, "sef")[1]["messages"][-1]["content"]
+        )
 
     def test_persistent_bad_plan_reports_failed(self, registry: Registry) -> None:
         client = FakeChatClient(lambda resolved, messages: "still garbage")
@@ -531,9 +542,7 @@ class TestSef:
 
 
 class TestBudget:
-    def test_zero_usd_budget_stops_before_first_call(
-        self, registry: Registry
-    ) -> None:
+    def test_zero_usd_budget_stops_before_first_call(self, registry: Registry) -> None:
         client = FakeChatClient(lambda resolved, messages: "x")
         report = make_orchestra(registry, client, budget_usd=0.0).run("task")
 
@@ -553,9 +562,7 @@ class TestBudget:
             return "done"
 
         client = FakeChatClient(handler)
-        report = make_orchestra(
-            registry, client, token_budget=25
-        ).run("task")
+        report = make_orchestra(registry, client, token_budget=25).run("task")
 
         assert report["status"] == "budget_exceeded"
         assert report["result"] is None
@@ -585,9 +592,7 @@ class TestModelSelection:
         )
         config = OrkestraConfig(
             providers={"p": provider},
-            models={
-                "mule": ModelConfig(name="mule", provider="p", tier=Tier.CHEAP)
-            },
+            models={"mule": ModelConfig(name="mule", provider="p", tier=Tier.CHEAP)},
         )
         with pytest.raises(EngineError, match="strong"):
             Orchestra(Registry(config), FakeChatClient(lambda r, m: "x"))
@@ -598,9 +603,7 @@ class TestModelSelection:
         )
         config = OrkestraConfig(
             providers={"p": provider},
-            models={
-                "brain": ModelConfig(name="brain", provider="p", tier=Tier.STRONG)
-            },
+            models={"brain": ModelConfig(name="brain", provider="p", tier=Tier.STRONG)},
         )
         with pytest.raises(EngineError, match="cheap"):
             Orchestra(Registry(config), FakeChatClient(lambda r, m: "x"))
@@ -615,18 +618,17 @@ class TestModelSelection:
 
 
 class TestSynthesisSeesOnlyPassed:
-    def test_failed_pieces_hidden_from_birlestirici(
-        self, registry: Registry
-    ) -> None:
+    def test_failed_pieces_hidden_from_birlestirici(self, registry: Registry) -> None:
         # t-1 passes; t-2 fails everything incl. escalation
         def handler(resolved, messages):
             role = role_of(messages)
             if role == "sef":
                 return plan_json()
             if role == "hamal":
-                if '"t-2"' in messages[1]["content"] or "square" in messages[1][
-                    "content"
-                ]:
+                if (
+                    '"t-2"' in messages[1]["content"]
+                    or "square" in messages[1]["content"]
+                ):
                     return "broken"
                 return '{"value": 1}'
             return "synthesis"
@@ -685,13 +687,18 @@ class TestUsageLogging:
         def handler(resolved, messages):
             role = role_of(messages)
             if role == "sef":
-                return {"content": plan_json(), "prompt_tokens": None,
-                        "completion_tokens": None}
+                return {
+                    "content": plan_json(),
+                    "prompt_tokens": None,
+                    "completion_tokens": None,
+                }
             if role == "hamal":
-                return {"content": '{"value": 1}', "prompt_tokens": None,
-                        "completion_tokens": None}
-            return {"content": "done", "prompt_tokens": None,
-                    "completion_tokens": None}
+                return {
+                    "content": '{"value": 1}',
+                    "prompt_tokens": None,
+                    "completion_tokens": None,
+                }
+            return {"content": "done", "prompt_tokens": None, "completion_tokens": None}
 
         client = FakeChatClient(handler)
         report = make_orchestra(registry, client).run("task")
@@ -702,7 +709,9 @@ class TestUsageLogging:
 
 
 class TestRegressionFixes:
-    def test_transport_error_rotates_to_next_cheap_model(self, registry: Registry) -> None:
+    def test_transport_error_rotates_to_next_cheap_model(
+        self, registry: Registry
+    ) -> None:
         """A dead provider must not burn every retry of its pieces."""
         from orkestra.errors import ChatError
 
@@ -724,7 +733,9 @@ class TestRegressionFixes:
         hamal_models = [c["model"] for c in calls_for(client, "hamal")]
         assert len(set(hamal_models)) == 2  # attempt 2 ran on the other mule
 
-    def test_over_budget_usd_reported_when_valve_overshot(self, registry: Registry) -> None:
+    def test_over_budget_usd_reported_when_valve_overshot(
+        self, registry: Registry
+    ) -> None:
         """A single call past the cap shows the overrun amount in the report."""
 
         def handler(resolved, messages):
@@ -733,24 +744,36 @@ class TestRegressionFixes:
                 return plan_json([PLAN_TWO["pieces"][0]])
             if role == "hamal":
                 # Oversized usage: sef 20 + hamal 4000 tokens > any cheap cap.
-                return {"content": '{"value": 1}', "prompt_tokens": 2000,
-                        "completion_tokens": 2000}
+                return {
+                    "content": '{"value": 1}',
+                    "prompt_tokens": 2000,
+                    "completion_tokens": 2000,
+                }
             return "done"
 
         client = FakeChatClient(handler)
-        report = make_orchestra(
-            registry, client, budget_usd=0.0001
-        ).run("task")
+        report = make_orchestra(registry, client, budget_usd=0.0001).run("task")
 
         assert report["status"] == "budget_exceeded"
         assert report["usage"]["over_budget_usd"] > 0
 
-    def test_array_typed_schema_is_rejected_then_repaired(self, registry: Registry) -> None:
+    def test_array_typed_schema_is_rejected_then_repaired(
+        self, registry: Registry
+    ) -> None:
         """sef's array-typed schema is a plan bug — repair prompt, then pass."""
-        bad = json.dumps({"pieces": [{
-            "id": "t-1", "instruction": "i", "input": {},
-            "output_schema": {"type": "array"}, "acceptance": [],
-        }]})
+        bad = json.dumps(
+            {
+                "pieces": [
+                    {
+                        "id": "t-1",
+                        "instruction": "i",
+                        "input": {},
+                        "output_schema": {"type": "array"},
+                        "acceptance": [],
+                    }
+                ]
+            }
+        )
         good = plan_json([PLAN_TWO["pieces"][0]])
         sef_replies = iter([bad, good])
 
@@ -778,11 +801,15 @@ class TestRegressionFixes:
             },
             "required": [f"f{i}" for i in range(10)] + ["kaynak"],
         }
-        pieces = [{
-            "id": "t-1", "instruction": "summarize",
-            "input": {"urls": ["https://a"]},
-            "output_schema": schema, "acceptance": [],
-        }]
+        pieces = [
+            {
+                "id": "t-1",
+                "instruction": "summarize",
+                "input": {"urls": ["https://a"]},
+                "output_schema": schema,
+                "acceptance": [],
+            }
+        ]
 
         def handler(resolved, messages):
             role = role_of(messages)
