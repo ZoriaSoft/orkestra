@@ -138,6 +138,12 @@ class TestParseJsonObject:
     def test_prose_around_json(self) -> None:
         assert parse_json_object('sure! {"a": 1} done', who="t") == {"a": 1}
 
+    def test_second_object_does_not_poison_parse(self) -> None:
+        assert parse_json_object('{"a": 1} {"b": 2}', who="t") == {"a": 1}
+
+    def test_trailing_brace_in_prose(self) -> None:
+        assert parse_json_object('{"a": 1} trailing }', who="t") == {"a": 1}
+
     def test_no_json_raises(self) -> None:
         with pytest.raises(ValueError, match="hamal"):
             parse_json_object("no json here", who="hamal")

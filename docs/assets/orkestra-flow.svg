@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" width="1200" role="img">
+  <title>orkestra flow</title>
+  <desc>A strong model splits a task into micro-tasks, cheap workers run them in parallel, a validator gates each output with code checks then model arbitration, and a synthesizer fuses the passed pieces into a metered report.</desc>
+  <style>
+    .t1 { font: 600 26px ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif; fill: #e6edf3; }
+    .t2 { font: 400 15px ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif; fill: #9aa7b4; }
+    .ct { font: 600 16px ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif; fill: #e6edf3; }
+    .cs { font: 400 10px ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif; fill: #5b6672; letter-spacing: 1.8px; }
+    .cd { font: 400 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif; fill: #9aa7b4; }
+    .card { fill: #161b22; stroke: #232a33; stroke-width: 1; }
+    .wire { stroke: #3a4450; stroke-width: 2; fill: none; }
+    .flow { stroke: #f0a03c; stroke-width: 2; fill: none; stroke-dasharray: 3 9; animation: dashmove 1.8s linear infinite; }
+    @keyframes dashmove { to { stroke-dashoffset: -24; } }
+    .stage { opacity: 0; animation: reveal .5s cubic-bezier(0.2, 0, 0, 1) both; }
+    @keyframes reveal { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
+    .s1 { animation-delay: .05s; } .s2 { animation-delay: .2s; } .s3 { animation-delay: .35s; }
+    .s4 { animation-delay: .5s; } .s5 { animation-delay: .65s; }
+    .tok { opacity: 0; }
+    .tokA { animation: tokA 10s cubic-bezier(0.2, 0, 0, 1) .9s infinite; }
+    .tokB { animation: tokB 10s cubic-bezier(0.2, 0, 0, 1) .9s infinite; }
+    .tokC { animation: tokC 10s cubic-bezier(0.2, 0, 0, 1) .9s infinite; }
+    @keyframes tokA {
+      0%   { transform: translate(352px, 285px); opacity: 0; }
+      4%   { opacity: 1; }
+      18%  { transform: translate(457px, 199px); opacity: 1; }
+      34%  { transform: translate(644px, 285px); }
+      52%  { transform: translate(851px, 285px); }
+      68%  { transform: translate(1064px, 285px); }
+      90%  { transform: translate(1064px, 285px); opacity: 1; }
+      100% { transform: translate(1064px, 285px); opacity: 0; }
+    }
+    @keyframes tokB {
+      0%   { transform: translate(352px, 285px); opacity: 0; }
+      4%   { opacity: 1; }
+      18%  { transform: translate(457px, 285px); opacity: 1; }
+      34%  { transform: translate(644px, 285px); }
+      52%  { transform: translate(851px, 285px); }
+      68%  { transform: translate(1064px, 285px); }
+      90%  { transform: translate(1064px, 285px); opacity: 1; }
+      100% { transform: translate(1064px, 285px); opacity: 0; }
+    }
+    @keyframes tokC {
+      0%   { transform: translate(352px, 285px); opacity: 0; }
+      4%   { opacity: 1; }
+      18%  { transform: translate(457px, 371px); opacity: 1; }
+      34%  { transform: translate(644px, 285px); }
+      44%  { transform: translate(644px, 358px); }
+      54%  { transform: translate(457px, 412px); }
+      62%  { transform: translate(457px, 371px); }
+      70%  { transform: translate(644px, 285px); }
+      80%  { transform: translate(851px, 285px); }
+      88%  { transform: translate(1064px, 285px); }
+      95%  { transform: translate(1064px, 285px); opacity: 1; }
+      100% { transform: translate(1064px, 285px); opacity: 0; }
+    }
+    .verdict { opacity: 0; }
+    .vOk  { animation: vOk 10s linear .9s infinite; }
+    .vBad { animation: vBad 10s linear .9s infinite; }
+    .vOk2 { animation: vOk2 10s linear .9s infinite; }
+    @keyframes vOk  { 0%, 33% { opacity: 0; } 36%, 92% { opacity: 1; } 96%, 100% { opacity: 0; } }
+    @keyframes vBad { 0%, 33% { opacity: 0; } 36%, 54% { opacity: 1; } 58%, 100% { opacity: 0; } }
+    @keyframes vOk2 { 0%, 69% { opacity: 0; } 72%, 92% { opacity: 1; } 96%, 100% { opacity: 0; } }
+    .gauge { transform: scaleX(0); transform-box: fill-box; transform-origin: left center;
+             animation: gauge 10s cubic-bezier(0.2, 0, 0, 1) .9s infinite; }
+    @keyframes gauge {
+      0% { transform: scaleX(0); opacity: 1; }
+      80% { transform: scaleX(1); opacity: 1; }
+      94% { transform: scaleX(1); opacity: 1; }
+      100% { transform: scaleX(1); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  </style>
+
+  <rect x="8" y="8" width="1184" height="604" rx="20" fill="#0e1116" stroke="#232a33"/>
+
+  <text class="t1" x="48" y="56">orkestra</text>
+  <text class="t2" x="48" y="82">Cheap models do the volume. Strong models judge.</text>
+
+  <!-- stage 1: task + planner -->
+  <g class="stage s1">
+    <rect class="card" x="48" y="230" width="110" height="110" rx="10"/>
+    <text class="ct" x="103" y="272" text-anchor="middle">TASK</text>
+    <text class="cd" x="103" y="296" text-anchor="middle">your task</text>
+    <path class="wire" d="M 158 285 L 200 285"/>
+    <path class="flow" d="M 158 285 L 200 285"/>
+  </g>
+  <g class="stage s2">
+    <rect class="card" x="200" y="210" width="152" height="150" rx="10"/>
+    <text class="ct" x="276" y="262" text-anchor="middle">ŞEF</text>
+    <text class="cs" x="276" y="280" text-anchor="middle">PLANNER</text>
+    <text class="cd" x="276" y="306" text-anchor="middle">splits into</text>
+    <text class="cd" x="276" y="324" text-anchor="middle">schema-bound tasks</text>
+    <text class="cd" x="276" y="344" text-anchor="middle" fill="#5b6672">strong model</text>
+    <path class="wire" d="M 352 285 L 392 199"/>
+    <path class="wire" d="M 352 285 L 392 285"/>
+    <path class="wire" d="M 352 285 L 392 371"/>
+    <path class="flow" d="M 352 285 L 392 199"/>
+    <path class="flow" d="M 352 285 L 392 285"/>
+    <path class="flow" d="M 352 285 L 392 371"/>
+  </g>
+
+  <!-- stage 2: workers -->
+  <g class="stage s3">
+    <rect class="card" x="392" y="160" width="130" height="78" rx="10"/>
+    <rect class="card" x="392" y="246" width="130" height="78" rx="10"/>
+    <rect class="card" x="392" y="332" width="130" height="78" rx="10"/>
+    <text class="ct" x="457" y="196" text-anchor="middle">HAMAL 1</text>
+    <text class="cs" x="457" y="214" text-anchor="middle">WORKER</text>
+    <text class="ct" x="457" y="282" text-anchor="middle">HAMAL 2</text>
+    <text class="cs" x="457" y="300" text-anchor="middle">WORKER</text>
+    <text class="ct" x="457" y="368" text-anchor="middle">HAMAL 3</text>
+    <text class="cs" x="457" y="386" text-anchor="middle">WORKER</text>
+    <text class="cd" x="457" y="434" text-anchor="middle">parallel · strict JSON output</text>
+    <path class="wire" d="M 522 199 L 564 258"/>
+    <path class="wire" d="M 522 285 L 564 285"/>
+    <path class="wire" d="M 522 371 L 564 312"/>
+    <path class="flow" d="M 522 199 L 564 258"/>
+    <path class="flow" d="M 522 285 L 564 285"/>
+    <path class="flow" d="M 522 371 L 564 312"/>
+  </g>
+
+  <!-- stage 3: validator + retry path -->
+  <g class="stage s4">
+    <rect class="card" x="564" y="215" width="160" height="140" rx="10"/>
+    <text class="ct" x="644" y="248" text-anchor="middle">KALFA</text>
+    <text class="cs" x="644" y="266" text-anchor="middle">VALIDATOR</text>
+    <text class="cd" x="644" y="296" text-anchor="middle">1 · schema + citations</text>
+    <text class="cd" x="644" y="314" text-anchor="middle">2 · model arbitration</text>
+    <path class="wire" d="M 644 355 C 644 420, 560 445, 500 440 C 470 437, 457 428, 457 410"/>
+    <path class="flow" d="M 644 355 C 644 420, 560 445, 500 440 C 470 437, 457 428, 457 410"/>
+    <path d="M 457 410 l -4 -8 M 457 410 l 6 -7" stroke="#5b6672" stroke-width="2" fill="none"/>
+    <text class="cd" x="550" y="462" text-anchor="middle" fill="#5b6672">fail → retry ≤ 2 → escalate to strong</text>
+    <path class="wire" d="M 724 285 L 766 285"/>
+    <path class="flow" d="M 724 285 L 766 285"/>
+  </g>
+
+  <!-- stage 4: synthesizer + report -->
+  <g class="stage s5">
+    <rect class="card" x="766" y="215" width="170" height="140" rx="10"/>
+    <text class="ct" x="851" y="248" text-anchor="middle">BİRLEŞTİRİCİ</text>
+    <text class="cs" x="851" y="266" text-anchor="middle">SYNTHESIZER</text>
+    <text class="cd" x="851" y="296" text-anchor="middle">synthesizes passed</text>
+    <text class="cd" x="851" y="314" text-anchor="middle">pieces only</text>
+    <path class="wire" d="M 936 285 L 976 285"/>
+    <path class="flow" d="M 936 285 L 976 285"/>
+    <rect class="card" x="976" y="215" width="176" height="140" rx="10"/>
+    <text class="ct" x="1064" y="248" text-anchor="middle">REPORT</text>
+    <circle cx="996" cy="278" r="3" fill="#3fb950"/>
+    <text class="cd" x="1006" y="282">status</text>
+    <circle cx="996" cy="302" r="3" fill="#3fb950"/>
+    <text class="cd" x="1006" y="306">per-piece verdicts</text>
+    <circle cx="996" cy="326" r="3" fill="#f0a03c"/>
+    <text class="cd" x="1006" y="330">usage &amp; cost</text>
+  </g>
+
+  <!-- verdict glyphs near the validator -->
+  <g class="verdict vOk">
+    <path d="M 668 232 l 6 7 l 12 -14" stroke="#3fb950" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 700 232 l 6 7 l 12 -14" stroke="#3fb950" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g class="verdict vBad">
+    <path d="M 668 344 l 14 14 M 682 344 l -14 14" stroke="#f85149" stroke-width="3" fill="none" stroke-linecap="round"/>
+  </g>
+  <g class="verdict vOk2">
+    <path d="M 668 344 l 6 7 l 12 -14" stroke="#3fb950" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- data tokens -->
+  <circle class="tok tokA" r="6" fill="#f0a03c"/>
+  <circle class="tok tokB" r="6" fill="#f0a03c"/>
+  <circle class="tok tokC" r="6" fill="#f0a03c"/>
+
+  <!-- bottom strip: budget valve -->
+  <g class="stage" style="animation-delay:.8s">
+    <rect x="48" y="516" width="1104" height="72" rx="12" fill="#161b22" stroke="#232a33"/>
+    <text class="ct" x="76" y="560">Budget valve</text>
+    <text class="cd" x="190" y="560">USD / token caps · every call metered</text>
+    <rect x="700" y="543" width="380" height="16" rx="8" fill="#1c232c" stroke="#3a4450"/>
+    <rect class="gauge" x="702" y="545" width="376" height="12" rx="6" fill="#f0a03c"/>
+    <text class="cd" x="1098" y="556" text-anchor="end" fill="#5b6672">est. spend</text>
+  </g>
+</svg>

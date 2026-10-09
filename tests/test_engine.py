@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import json
 import threading
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 
 from orkestra.chat import ChatResponse
 from orkestra.engine import Orchestra
-from orkestra.errors import EngineError
+from orkestra.errors import ChatError, EngineError
 from orkestra.registry import Registry
 from orkestra.schema import (
     CostHint,
@@ -799,3 +800,153 @@ class TestRegressionFixes:
         # citation feedback reached the hamal despite the schema flood
         retry_prompt = calls_for(client, "hamal")[1]["messages"][1]["content"]
         assert "citation" in retry_prompt
+
+
+class TestRunAbort:
+    """An EngineError inside one piece aborts the run cooperatively.
+
+    Regression: the old code called ``pool.shutdown(cancel_futures=True)``
+    inside the ``as_completed`` loop, which deadlocked the iteration —
+    pending futures cancelled by the executor never notify the as_completed
+    waiter, so ``orkestra run`` hung forever on a broken arbiter.
+    """
+
+    PIECES = [
+        {
+            "id": f"t-{i}",
+            "instruction": "work",
+            "input": {},
+            "output_schema": NUM_SCHEMA,
+            "acceptance": [] if i == 1 else ["looks fine"],
+        }
+        for i in range(1, 5)
+    ]
+
+    def _run_in_thread(self, orchestra: Orchestra, timeout: float = 10.0):
+        """Run the orchestra off-thread so a regression hang fails, not stalls."""
+        box: dict[str, Any] = {}
+
+        def go() -> None:
+            try:
+                box["report"] = orchestra.run("task")
+            except BaseException as exc:  # noqa: BLE001 — capture for assertion
+                box["exc"] = exc
+
+        thread = threading.Thread(target=go, daemon=True)
+        thread.start()
+        thread.join(timeout)
+        assert not thread.is_alive(), "run() did not return within the timeout"
+        if "exc" in box:
+            raise box["exc"]
+        return box["report"]
+
+    def test_abort_returns_and_marks_queued_pieces_cancelled(
+        self, registry: Registry
+    ) -> None:
+        """Dead arbiter + more pieces than workers: queued pieces report
+        'cancelled', the run returns a partial report, no hang."""
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json(self.PIECES)
+            if role == "hamal":
+                return '{"value": 1}'
+            if role == "kalfa":
+                return ChatError("arbiter endpoint dead")
+            if role == "birlestirici":
+                return "synthesis"
+            raise AssertionError(role)
+
+        client = FakeChatClient(handler)
+        report = self._run_in_thread(make_orchestra(registry, client, max_parallel=1))
+
+        piece_status = {p["id"]: p["status"] for p in report["pieces"]}
+        # every piece appears in the report
+        assert set(piece_status) == {"t-1", "t-2", "t-3", "t-4"}
+        assert piece_status["t-1"] == "passed"
+        assert piece_status["t-2"] == "failed"
+        assert piece_status["t-3"] == "cancelled"
+        assert piece_status["t-4"] == "cancelled"
+        # abort + a usable synthesis -> partial, not a blanket "failed"
+        assert report["status"] == "partial"
+        assert report["result"] == "synthesis"
+        assert report["errors"]
+
+    def test_keyboardinterrupt_in_piece_propagates(self, registry: Registry) -> None:
+        """Ctrl-C semantics must survive the worker pool: it is re-raised,
+        not swallowed into a 'failed' report."""
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json(self.PIECES)
+            if role == "hamal":
+                raise KeyboardInterrupt
+            return "done"
+
+        client = FakeChatClient(handler)
+        with pytest.raises(KeyboardInterrupt):
+            make_orchestra(registry, client).run("task")
+
+
+class TestCitationList:
+    """x-from-input on an array property: every element must be in the input."""
+
+    LIST_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "kaynaklar": {
+                "type": "array",
+                "items": {"type": "string"},
+                "x-from-input": "urls",
+            },
+            "ozet": {"type": "string"},
+        },
+        "required": ["kaynaklar", "ozet"],
+    }
+
+    def _piece(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": "t-1",
+                "instruction": "summarize",
+                "input": {"urls": ["https://a", "https://b"]},
+                "output_schema": self.LIST_SCHEMA,
+                "acceptance": [],
+            }
+        ]
+
+    def test_citation_list_all_members_pass(self, registry: Registry) -> None:
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json(self._piece())
+            if role == "hamal":
+                return json.dumps(
+                    {"kaynaklar": ["https://a", "https://b"], "ozet": "x"}
+                )
+            return "done"
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client).run("task")
+        assert report["pieces"][0]["status"] == "passed"
+
+    def test_citation_list_with_stranger_fails(self, registry: Registry) -> None:
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json(self._piece())
+            if role == "hamal":
+                return json.dumps(
+                    {"kaynaklar": ["https://a", "https://invented"], "ozet": "x"}
+                )
+            return "done"
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client).run("task")
+
+        assert calls_for(client, "kalfa") == []
+        piece = report["pieces"][0]
+        assert piece["status"] == "failed"
+        assert "https://invented" in piece["attempts"][0]["reasons"][0]

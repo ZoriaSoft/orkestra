@@ -12,7 +12,7 @@ exchange during a run:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -89,12 +89,13 @@ class KalfaVerdict(BaseModel):
     fix_hint: str | None = None
 
 
-class PieceStatus(str, Enum):
+class PieceStatus(StrEnum):
     """Final state of a micro-task after the hamal/kalfa loop."""
 
     PASSED = "passed"
     ESCALATED_PASSED = "escalated"  # passed only after promotion to strong
     FAILED = "failed"
+    CANCELLED = "cancelled"  # never ran: the run was aborted first
 
 
 @dataclass

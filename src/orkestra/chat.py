@@ -215,13 +215,23 @@ def parse_json_object(text: str, *, who: str) -> dict[str, Any]:
     try:
         parsed = json.loads(cleaned)
     except ValueError:
-        start, end = cleaned.find("{"), cleaned.rfind("}")
-        if start == -1 or end <= start:
+        start = cleaned.find("{")
+        if start == -1:
             raise ValueError(f"{who}: reply contains no JSON object") from None
         try:
-            parsed = json.loads(cleaned[start : end + 1])
-        except ValueError as exc:
-            raise ValueError(f"{who}: reply is not valid JSON: {exc}") from exc
+            # raw_decode stops at the end of the first object, so trailing
+            # prose — even prose containing braces — cannot poison the parse.
+            parsed, _ = json.JSONDecoder().raw_decode(cleaned, start)
+        except ValueError:
+            # Fallback: the widest {...} slice (the object's own braces may
+            # have been preceded by junk that raw_decode tripped on).
+            end = cleaned.rfind("}")
+            if end <= start:
+                raise ValueError(f"{who}: reply contains no JSON object") from None
+            try:
+                parsed = json.loads(cleaned[start : end + 1])
+            except ValueError as exc:
+                raise ValueError(f"{who}: reply is not valid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
         raise ValueError(f"{who}: reply must be a JSON object")
     return parsed

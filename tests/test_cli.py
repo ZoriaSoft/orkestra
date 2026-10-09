@@ -329,3 +329,16 @@ class TestRunCli:
         result = runner.invoke(app, ["run", "task", "--budget", "1.0"])
         assert result.exit_code == 1
         assert "cost hints" in combined_output(result)
+
+    @pytest.mark.parametrize(
+        "flag", [["--budget", "0"], ["--budget", "-1.5"], ["--token-budget", "0"],
+                 ["--token-budget", "-3"], ["--max-parallel", "0"]]
+    )
+    def test_run_rejects_nonpositive_limits(
+        self, runner: CliRunner, flag: list[str]
+    ) -> None:
+        """--budget/--token-budget/--max-parallel <= 0 is a usage error,
+        rejected before any registry load or network call."""
+        result = runner.invoke(app, ["run", "task", *flag])
+        assert result.exit_code == 1
+        assert "error:" in combined_output(result)

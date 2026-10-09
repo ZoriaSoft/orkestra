@@ -25,6 +25,9 @@ MAX_VIOLATIONS = 8
 MAX_SCHEMA_VIOLATIONS = 5
 MAX_CITATION_VIOLATIONS = 3
 
+_MISSING = object()
+"""Sentinel: distinguishes "no bad element" from a bad element that is None."""
+
 
 def deterministic_violations(task: MicroTask, output: Any) -> list[str]:
     """Return human-readable violations; empty list means stage-1 passed.
@@ -71,8 +74,12 @@ def _citation_violations(task: MicroTask, output: dict[str, Any]) -> list[str]:
             )
             continue
         value = output[prop]
-        if value not in source:
+        # A list value is a citation *set*: every element must come from the
+        # input (an empty list carries no false claim, so it passes).
+        candidates = value if isinstance(value, list) else [value]
+        bad = next((v for v in candidates if v not in source), _MISSING)
+        if bad is not _MISSING:
             violations.append(
-                f"citation: {prop}: {value!r} is not a member of input {source_key!r}"
+                f"citation: {prop}: {bad!r} is not a member of input {source_key!r}"
             )
     return violations

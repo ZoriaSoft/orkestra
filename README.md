@@ -5,6 +5,8 @@ strong model decomposes (**sef**), cheap models execute micro-tasks in
 parallel (**hamal**), a validator gates every output (**kalfa**), a strong
 model synthesizes (**birlestirici**).
 
+<p align="center"><img src="docs/assets/orkestra-flow.svg" alt="orkestra pipeline: task → sef planner → hamal workers → kalfa validator → birlestirici synthesizer → metered report" width="100%"></p>
+
 **Phase 2 (this release):** `orkestra run` executes a task end to end —
 deterministic + model-arbitrated validation, bounded retries with strong-
 model escalation, per-call usage logging and USD/token budget valves.

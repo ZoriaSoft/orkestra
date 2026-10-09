@@ -16,7 +16,8 @@ from collections.abc import Callable
 from typing import Any, TypeVar
 
 import typer
-from pydantic import BaseModel, ValidationError as PydanticValidationError
+from pydantic import BaseModel
+from pydantic import ValidationError as PydanticValidationError
 
 from orkestra.config import ConfigStore
 from orkestra.errors import OrkestraError, ValidationError

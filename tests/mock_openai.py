@@ -21,8 +21,9 @@ from __future__ import annotations
 import json
 import threading
 import time
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Callable
+from typing import Any
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -32,7 +33,7 @@ class _Handler(BaseHTTPRequestHandler):
         return
 
     @property
-    def mock(self) -> "MockOpenAIServer":
+    def mock(self) -> MockOpenAIServer:
         return self.server.mock  # type: ignore[attr-defined]
 
     def do_GET(self) -> None:
@@ -181,7 +182,7 @@ class MockOpenAIServer:
         """Base URL with a ``/v1`` suffix."""
         return f"{self.base_url}/v1"
 
-    def start(self) -> "MockOpenAIServer":
+    def start(self) -> MockOpenAIServer:
         """Start serving in a daemon thread."""
         self._thread.start()
         return self

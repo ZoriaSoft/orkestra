@@ -21,6 +21,7 @@ report with status ``budget_exceeded`` is returned, never a silent stop.
 from __future__ import annotations
 
 import json
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -160,6 +161,9 @@ class Orchestra:
 
         if budget_hit:
             status = "budget_exceeded"
+        elif errors and (result is not None or any(r.ok for r in results)):
+            # An abort mid-run can still leave a usable deliverable — say so.
+            status = "partial"
         elif errors:
             status = "failed"
         elif all(r.ok for r in results):
@@ -310,13 +314,20 @@ class Orchestra:
         """Run pieces in parallel over the cheap pool; order is preserved.
 
         An infrastructure failure (a broken arbiter, an unexpected exception)
-        does not discard the run: pending pieces are cancelled, completed
+        does not discard the run: ``abort_event`` tells queued pieces to report
+        themselves ``cancelled`` instead of calling the model, completed
         results are kept and the error is returned so the caller can emit a
         partial report with the full usage ledger. In-flight HTTP calls are
-        not interruptible, but no *new* pieces start after the abort.
+        not interruptible, but no *new* model calls start after the abort.
+
+        Cancellation is cooperative: ``cancel_futures=True`` inside the
+        ``as_completed`` loop would deadlock the iteration (a drained pending
+        future is never marked CANCELLED_AND_NOTIFIED, so the waiter's event
+        is never set), so pieces check the event themselves.
         """
         results: list[PieceResult | None] = [None] * len(pieces)
         abort: EngineError | None = None
+        abort_event = threading.Event()
         workers = min(self._max_parallel, len(pieces))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
@@ -325,6 +336,7 @@ class Orchestra:
                     piece,
                     i,
                     ledger,
+                    abort_event,
                 ): i
                 for i, piece in enumerate(pieces)
             }
@@ -340,6 +352,7 @@ class Orchestra:
                         output=None,
                         error=str(exc),
                     )
+                    abort_event.set()
                 except EngineError as exc:
                     if abort is None:
                         abort = exc
@@ -349,34 +362,84 @@ class Orchestra:
                         output=None,
                         error=str(exc),
                     )
-                    pool.shutdown(wait=False, cancel_futures=True)
-                except BaseException as exc:
+                    abort_event.set()
+                except (KeyboardInterrupt, SystemExit):
+                    # Stop dispatching new work and let the interrupt
+                    # propagate — swallowing it would trap the user in a
+                    # run that looks hung.
+                    abort_event.set()
+                    raise
+                except Exception as exc:
                     # Unexpected infrastructure failure: keep it loud, but
                     # still return the partial results + ledger to the caller.
                     if abort is None:
                         abort = EngineError(f"run aborted: {exc}")
-                    pool.shutdown(wait=False, cancel_futures=True)
+                    results[index] = PieceResult(
+                        task=piece,
+                        status=PieceStatus.FAILED,
+                        output=None,
+                        error=str(exc),
+                    )
+                    abort_event.set()
         return [r for r in results if r is not None], abort
+
+    @staticmethod
+    def _cancelled(piece: MicroTask, attempts: list[Attempt]) -> PieceResult:
+        """The piece never started (or stopped) because the run was aborted."""
+        return PieceResult(
+            task=piece,
+            status=PieceStatus.CANCELLED,
+            output=None,
+            attempts=attempts,
+            error="cancelled: run aborted",
+        )
 
     def _execute_piece(
         self,
         piece: MicroTask,
         pool_index: int,
         ledger: UsageLedger,
+        abort_event: threading.Event,
     ) -> PieceResult:
         """hamal attempt(s) + kalfa verdict; escalate to strong on exhaustion.
 
         On a transport error the next cheap model in the pool takes over
         (round-robin from the piece's start slot), so one dead provider
         does not burn every retry of every piece it was assigned.
+
+        ``abort_event`` is checked before every LLM call: once the run is
+        aborted the piece reports itself cancelled instead of spending
+        budget on a doomed attempt.
         """
         attempts: list[Attempt] = []
         fix_hint: str | None = None
         reasons: list[str] = []
-        unchecked: list[str] = []
         slot = pool_index
 
+        try:
+            return self._piece_loop(
+                piece, slot, ledger, abort_event, attempts, fix_hint, reasons
+            )
+        except EngineError:
+            # Fail fast for siblings too: the worker knows the run is dead
+            # before the collector thread consumes its future.
+            abort_event.set()
+            raise
+
+    def _piece_loop(
+        self,
+        piece: MicroTask,
+        slot: int,
+        ledger: UsageLedger,
+        abort_event: threading.Event,
+        attempts: list[Attempt],
+        fix_hint: str | None,
+        reasons: list[str],
+    ) -> PieceResult:
+        unchecked: list[str] = []
         for n in range(1, piece.max_retries + 2):
+            if abort_event.is_set():
+                return self._cancelled(piece, attempts)
             cheap = self._cheap[slot % len(self._cheap)]
             try:
                 response = self._call_llm(
@@ -412,6 +475,8 @@ class Orchestra:
                 )
                 continue
 
+            if abort_event.is_set():
+                return self._cancelled(piece, attempts)
             verdict, unchecked = self._validate(piece, output, ledger, n)
             attempts.append(
                 Attempt(n, cheap.model.name, "cheap", verdict.passed, verdict.reasons)
@@ -427,7 +492,7 @@ class Orchestra:
             reasons = verdict.reasons
             fix_hint = verdict.fix_hint
 
-        return self._escalate(piece, ledger, attempts, reasons, fix_hint)
+        return self._escalate(piece, ledger, attempts, reasons, fix_hint, abort_event)
 
     def _escalate(
         self,
@@ -436,8 +501,11 @@ class Orchestra:
         attempts: list[Attempt],
         reasons: list[str],
         fix_hint: str | None,
+        abort_event: threading.Event,
     ) -> PieceResult:
         """Last chance: run the piece once on the strong model."""
+        if abort_event.is_set():
+            return self._cancelled(piece, attempts)
         n = len(attempts) + 1
         try:
             response = self._call_llm(
@@ -461,6 +529,8 @@ class Orchestra:
                 error=f"escalation failed: {exc}",
             )
 
+        if abort_event.is_set():
+            return self._cancelled(piece, attempts)
         verdict, unchecked = self._validate(piece, output, ledger, n)
         attempts.append(
             Attempt(n, self._strong.model.name, "strong", verdict.passed, verdict.reasons)

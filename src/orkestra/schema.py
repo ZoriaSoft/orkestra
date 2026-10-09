@@ -10,7 +10,7 @@ budget valve).
 from __future__ import annotations
 
 import re
-from enum import Enum
+from enum import StrEnum
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -19,7 +19,7 @@ NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 """Registry keys must be shell-friendly slugs (lowercase, start alnum)."""
 
 
-class Tier(str, Enum):
+class Tier(StrEnum):
     """Cost/quality layer of a model inside the orchestra."""
 
     STRONG = "strong"
@@ -29,7 +29,7 @@ class Tier(str, Enum):
     """Low-cost model for micro-tasks (hamal pool)."""
 
 
-class Purpose(str, Enum):
+class Purpose(StrEnum):
     """What a registered model is meant to be used for."""
 
     CHAT = "chat"

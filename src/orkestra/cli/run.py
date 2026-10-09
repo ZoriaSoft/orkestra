@@ -12,6 +12,7 @@ from rich.table import Table
 
 from orkestra.chat import HttpChatClient
 from orkestra.engine import Orchestra
+from orkestra.errors import ValidationError
 
 from .common import command_guard, open_registry
 from .output import console
@@ -53,6 +54,12 @@ def run_command(
 ) -> None:
     """Run one task: sef decomposes, hamal pool executes, kalfa validates,
     birlestirici synthesizes."""
+    if budget is not None and budget <= 0:
+        raise ValidationError("--budget must be greater than 0 (USD)")
+    if token_budget is not None and token_budget <= 0:
+        raise ValidationError("--token-budget must be a positive integer")
+    if max_parallel < 1:
+        raise ValidationError("--max-parallel must be at least 1")
     _, registry = open_registry()
     orchestra = Orchestra(
         registry,
@@ -88,7 +95,8 @@ def _render(report: dict[str, Any]) -> None:
     table.add_column("error", overflow="fold")
     for piece in report["pieces"]:
         status_style = "green" if piece["status"] == "passed" else (
-            "cyan" if piece["status"] == "escalated" else "red"
+            "cyan" if piece["status"] == "escalated"
+            else "yellow" if piece["status"] == "cancelled" else "red"
         )
         table.add_row(
             piece["id"],

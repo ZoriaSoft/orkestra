@@ -6,4 +6,4 @@ sef (decompose) -> hamal pool (cheap workers) -> kalfa (validate) ->
 birlestirici (synthesize), with per-call usage logging and budget valves.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
