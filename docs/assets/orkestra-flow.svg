@@ -13,8 +13,8 @@
     @keyframes dashmove { to { stroke-dashoffset: -24; } }
     .stage { opacity: 0; animation: reveal .5s cubic-bezier(0.2, 0, 0, 1) both; }
     @keyframes reveal { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
-    .s1 { animation-delay: .05s; } .s2 { animation-delay: .2s; } .s3 { animation-delay: .35s; }
-    .s4 { animation-delay: .5s; } .s5 { animation-delay: .65s; }
+    .s1 { animation-delay: .05s; } .s2 { animation-delay: .15s; } .s3 { animation-delay: .25s; }
+    .s4 { animation-delay: .35s; } .s5 { animation-delay: .45s; }
     .tok { opacity: 0; }
     .tokA { animation: tokA 10s cubic-bezier(0.2, 0, 0, 1) .9s infinite; }
     .tokB { animation: tokB 10s cubic-bezier(0.2, 0, 0, 1) .9s infinite; }
@@ -60,13 +60,12 @@
     @keyframes vOk  { 0%, 33% { opacity: 0; } 36%, 92% { opacity: 1; } 96%, 100% { opacity: 0; } }
     @keyframes vBad { 0%, 33% { opacity: 0; } 36%, 54% { opacity: 1; } 58%, 100% { opacity: 0; } }
     @keyframes vOk2 { 0%, 69% { opacity: 0; } 72%, 92% { opacity: 1; } 96%, 100% { opacity: 0; } }
-    .gauge { transform: scaleX(0); transform-box: fill-box; transform-origin: left center;
+    .gauge { transform: scaleX(0.6); transform-box: fill-box; transform-origin: left center;
              animation: gauge 10s cubic-bezier(0.2, 0, 0, 1) .9s infinite; }
     @keyframes gauge {
-      0% { transform: scaleX(0); opacity: 1; }
-      80% { transform: scaleX(1); opacity: 1; }
-      94% { transform: scaleX(1); opacity: 1; }
-      100% { transform: scaleX(1); opacity: 0; }
+      0%, 30% { transform: scaleX(0.6); }
+      55%, 80% { transform: scaleX(0.78); }
+      100% { transform: scaleX(0.6); }
     }
     @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
   </style>
@@ -110,7 +109,7 @@
     <text class="cs" x="457" y="300" text-anchor="middle">WORKER</text>
     <text class="ct" x="457" y="368" text-anchor="middle">HAMAL 3</text>
     <text class="cs" x="457" y="386" text-anchor="middle">WORKER</text>
-    <text class="cd" x="457" y="434" text-anchor="middle">parallel · strict JSON output</text>
+    <text class="cd" x="457" y="148" text-anchor="middle">parallel · strict JSON output</text>
     <path class="wire" d="M 522 199 L 564 258"/>
     <path class="wire" d="M 522 285 L 564 285"/>
     <path class="wire" d="M 522 371 L 564 312"/>
@@ -129,7 +128,7 @@
     <path class="wire" d="M 644 355 C 644 420, 560 445, 500 440 C 470 437, 457 428, 457 410"/>
     <path class="flow" d="M 644 355 C 644 420, 560 445, 500 440 C 470 437, 457 428, 457 410"/>
     <path d="M 457 410 l -4 -8 M 457 410 l 6 -7" stroke="#5b6672" stroke-width="2" fill="none"/>
-    <text class="cd" x="550" y="462" text-anchor="middle" fill="#5b6672">fail → retry ≤ 2 → escalate to strong</text>
+    <text class="cd" x="550" y="478" text-anchor="middle" fill="#5b6672">fail → retry ≤ 2 → escalate to strong</text>
     <path class="wire" d="M 724 285 L 766 285"/>
     <path class="flow" d="M 724 285 L 766 285"/>
   </g>
@@ -171,12 +170,12 @@
   <circle class="tok tokC" r="6" fill="#f0a03c"/>
 
   <!-- bottom strip: budget valve -->
-  <g class="stage" style="animation-delay:.8s">
+  <g class="stage" style="animation-delay:.55s">
     <rect x="48" y="516" width="1104" height="72" rx="12" fill="#161b22" stroke="#232a33"/>
-    <text class="ct" x="76" y="560">Budget valve</text>
-    <text class="cd" x="190" y="560">USD / token caps · every call metered</text>
-    <rect x="700" y="543" width="380" height="16" rx="8" fill="#1c232c" stroke="#3a4450"/>
-    <rect class="gauge" x="702" y="545" width="376" height="12" rx="6" fill="#f0a03c"/>
-    <text class="cd" x="1098" y="556" text-anchor="end" fill="#5b6672">est. spend</text>
+    <text class="ct" x="76" y="548">Budget valve</text>
+    <text class="cd" x="76" y="572">USD / token caps · every call metered</text>
+    <text class="cd" x="748" y="556" text-anchor="end" fill="#5b6672">est. spend</text>
+    <rect x="764" y="543" width="320" height="16" rx="8" fill="#1c232c" stroke="#3a4450"/>
+    <rect class="gauge" x="766" y="545" width="316" height="12" rx="6" fill="#f0a03c"/>
   </g>
 </svg>
