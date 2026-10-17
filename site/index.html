@@ -391,7 +391,7 @@ footer{
     </div>
     <div class="term">
       <div class="term-bar"><i></i><i></i><i></i><span>orkestra run</span></div>
-<pre><span class="tk-m">$</span> orkestra run <span class="tk-st">"20 URL'deki fiyatları TL tablosuna dök"</span> \
+<pre><span class="tk-m">$</span> orkestra run <span class="tk-st">"İçeriği verilen 20 ürün kaydındaki fiyatları TL tablosuna dök: [kayıt içerikleri]"</span> \
     <span class="tk-p">--budget</span> <span class="tk-nm">0.50</span> <span class="tk-p">--max-parallel</span> <span class="tk-nm">4</span>
 
 <span class="tk-m">şef   →</span> plan: <span class="tk-nm">20</span> parça (t-001..t-020)
@@ -532,7 +532,7 @@ t-013  <span class="tk-r">failed</span>     <span class="tk-m">→ birleştirici
     </div>
 
     <div class="d-note">
-      <b>Neden ucuz model muhakeme yapmaz?</b> Ucuz modelin hata modu "kendinden emin uydurma"dır — ona muhakeme verirsen hatasını denetleyecek başka ucuz model gerekir, sonsuz regres. Bunun yerine görev tanımı daralır: tek iş, tek çıktı şeması. <b>"Bilmiyorum" meşru bir cevaptır</b>; uydurmak ise kalfanın şema + alıntı kontrollerinde garantili yakalanır.
+      <b>Neden ucuz model muhakeme yapmaz?</b> Ucuz modelin hata modu "kendinden emin uydurma"dır — ona muhakeme verirsen hatasını denetleyecek başka ucuz model gerekir, sonsuz regres. Bunun yerine görev tanımı daralır: tek iş, tek çıktı şeması. <b>"Bilmiyorum" meşru bir cevaptır</b>; uydurmaların bir kısmı kalfanın şema + alıntı kontrollerine takılabilir.
     </div>
 
     <div class="two-col">
@@ -574,7 +574,7 @@ t-013  <span class="tk-r">failed</span>     <span class="tk-m">→ birleştirici
             <td><span class="tag t-strong">ŞEF</span></td>
             <td><code>tier: strong</code> model</td>
             <td>Görev → mikro-görev listesi (JSON plan)</td>
-            <td>Her parçanın doğruluğu <b>mekanik kontrol edilebilmeli</b>. "Araştır" değil, "şu 20 URL'deki fiyatları tabloya dök" yazar.</td>
+            <td>Her parçanın doğruluğu <b>mekanik kontrol edilebilmeli</b>. "Araştır" değil, "içeriği verilen şu 20 ürün kaydındaki fiyatları tabloya dök" yazar.</td>
           </tr>
           <tr>
             <td><span class="tag t-cheap">HAMAL</span></td>
@@ -686,15 +686,15 @@ t-013  <span class="tk-r">failed</span>     <span class="tk-m">→ birleştirici
   <div class="wrap">
     <div class="sec-head">
       <span class="sec-num">04 — uçtan uca</span>
-      <h2>Örnek senaryo: 20 URL → fiyat tablosu</h2>
-      <p class="sec-sub">Klasik altın görev: şef 20 parçaya böler, hamal havuzu çıkarır, kalfa alıntıyı denetler, birleştirici tabloyu kurar.</p>
+      <h2>Örnek senaryo: 20 ürün kaydı → fiyat tablosu</h2>
+      <p class="sec-sub">Kayıt içerikleri görevle birlikte girdi olarak verilir (orkestra URL fetch etmez): şef 20 parçaya böler, hamal havuzu her kaydın içeriğinden çıkarır, kalfa alıntıyı denetler, birleştirici tabloyu kurar.</p>
     </div>
 
     <div class="scenario">
       <div class="sc-steps">
-        <div class="sc-step"><span class="n">t-000</span><span>Şef görevi <b>20 parçaya</b> böler: <code>t-001..t-020</code>, her biri tek URL + <code>output_schema {fiyat:number, kaynak:string(x-from-input)}</code>.</span></div>
+        <div class="sc-step"><span class="n">t-000</span><span>Şef görevi <b>20 parçaya</b> böler: <code>t-001..t-020</code>, her biri <code>input</code>'ta içeriği verilen tek ürün kaydı + <code>output_schema {fiyat:number, kaynak:string(x-from-input)}</code>.</span></div>
         <div class="sc-step"><span class="n">pool</span><span>Hamal havuzu parçaları paylaşır; her parça tek çağrıda JSON döner.</span></div>
-        <div class="sc-step"><span class="n">deny</span><span>Kalfa deterministik denetler: <code>kaynak</code> input URL'lerinden biri değilse anında <b>citation ihlali</b> → retry.</span></div>
+        <div class="sc-step"><span class="n">deny</span><span>Kalfa deterministik denetler: <code>kaynak</code> input'taki kayıt kimliklerinden biri değilse anında <b>citation ihlali</b> → retry.</span></div>
         <div class="sc-step"><span class="n">t-007</span><span>İki kez kalırsa → strong modele <b>yükseltilir</b>, <code>escalated</code> olarak geçer.</span></div>
         <div class="sc-step"><span class="n">t-013</span><span>Her şeye rağmen kalırsa → <code>failed</code>; birleştirici çıktıda <b>"t-013 eksik"</b> diye belirtir, status <code>partial</code>.</span></div>
         <div class="sc-step"><span class="n">out</span><span>Rapor: tablo + parça durumları + çağrı başına token/maliyet dökümü.</span></div>
@@ -712,7 +712,7 @@ orkestra models add mule  -p openai -t <span class="c-nm">cheap</span> --model-i
     --purpose micro-task --cost-in <span class="c-nm">0.10</span> --cost-out <span class="c-nm">0.40</span>
 
 <span class="c-cm"># koşu</span>
-orkestra run <span class="c-st">"Şu 20 ürün sayfasındaki fiyatları TL'ye çevirip tablo yap: ..."</span> \
+orkestra run <span class="c-st">"Aşağıda içeriği verilen 20 ürün kaydındaki fiyatları TL'ye çevirip tablo yap: [kayıt içerikleri]"</span> \
     <span class="c-fl">--budget</span> <span class="c-nm">0.50</span> <span class="c-fl">--max-parallel</span> <span class="c-nm">4</span></pre>
         </div>
         <div class="note-inline"><b>Şef'in ürettiği mikro-görev</b> hamalın aldığı tek şeydir — dar talimat + <code>input</code> + <code>output_schema</code> + <code>acceptance</code> kriterleri + <code>budget_tokens</code> kotası. Kalan her şey orkestradadır.</div>
@@ -747,9 +747,11 @@ pip install -e <span class="c-st">".[dev]"</span> && pytest</pre>
 orkestra providers add openai --base-url https://api.openai.com/v1 \
     --api-key-env OPENAI_API_KEY
 orkestra providers test openai
-orkestra models add planner -p openai -t <span class="c-nm">strong</span> --model-id gpt-5
+orkestra models add planner -p openai -t <span class="c-nm">strong</span> --model-id gpt-5 \
+    --cost-in <span class="c-nm">2.0</span> --cost-out <span class="c-nm">8.0</span>
 orkestra models add worker  -p openai -t <span class="c-nm">cheap</span> \
-    --purpose micro-task --model-id gpt-5-mini
+    --purpose micro-task --model-id gpt-5-mini \
+    --cost-in <span class="c-nm">0.10</span> --cost-out <span class="c-nm">0.40</span>
 orkestra run <span class="c-st">"görevin"</span> --budget <span class="c-nm">1.00</span></pre>
         </div>
         <div class="note-inline">Konfigürasyon <code>~/.orkestra/config.yaml</code>'da durur (ilk yazımda oluşur, mod <code>0600</code>). Ana dizini <code>ORKESTRA_HOME</code> ile değiştirebilirsin.</div>
