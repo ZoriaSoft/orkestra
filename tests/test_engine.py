@@ -977,3 +977,122 @@ class TestCitationList:
         piece = report["pieces"][0]
         assert piece["status"] == "failed"
         assert "https://invented" in piece["attempts"][0]["reasons"][0]
+
+class TestExternalRefRejected:
+    """External $refs in output_schema are SSRF: reject at plan time."""
+
+    @pytest.mark.parametrize(
+        "bad_ref",
+        [
+            "https://169.254.169.254/latest/meta-data",
+            "http://127.0.0.1:8080/admin",
+            "file:///etc/passwd",
+            "other-schema.json",
+            "../secret.json",
+        ],
+    )
+    def test_external_ref_rejected_without_network(
+        self, registry: Registry, monkeypatch: pytest.MonkeyPatch, bad_ref: str
+    ) -> None:
+        from unittest import mock
+
+        urlopen = mock.Mock(side_effect=AssertionError("network fetch attempted"))
+        monkeypatch.setattr("urllib.request.urlopen", urlopen)
+        pieces = [
+            {
+                "id": "t-1",
+                "instruction": "return a value",
+                "input": {},
+                "output_schema": {
+                    "type": "object",
+                    "properties": {"value": {"$ref": bad_ref}},
+                    "required": ["value"],
+                },
+                "acceptance": [],
+            }
+        ]
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json(pieces)
+            if role == "hamal":
+                return '{"value": 1}'
+            return "done"
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client).run("task")
+
+        assert report["status"] == "failed"
+        assert calls_for(client, "hamal") == []
+        assert "external $ref" in report["errors"][0]
+        urlopen.assert_not_called()
+
+    def test_local_fragment_ref_still_allowed(
+        self, registry: Registry, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from unittest import mock
+
+        urlopen = mock.Mock(side_effect=AssertionError("network fetch attempted"))
+        monkeypatch.setattr("urllib.request.urlopen", urlopen)
+        pieces = [
+            {
+                "id": "t-1",
+                "instruction": "return a value",
+                "input": {},
+                "output_schema": {
+                    "type": "object",
+                    "properties": {"value": {"$ref": "#/$defs/num"}},
+                    "$defs": {"num": {"type": "number"}},
+                    "required": ["value"],
+                },
+                "acceptance": [],
+            }
+        ]
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json(pieces)
+            if role == "hamal":
+                return '{"value": 1}'
+            return "done"
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client).run("task")
+
+        assert report["status"] == "ok"
+        assert report["pieces"][0]["status"] == "passed"
+        urlopen.assert_not_called()
+
+    def test_validate_rejects_external_ref_without_network(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from unittest import mock
+
+        from orkestra.plan import MicroTask
+        from orkestra.validate import deterministic_violations
+
+        urlopen = mock.Mock(side_effect=AssertionError("network fetch attempted"))
+        monkeypatch.setattr("urllib.request.urlopen", urlopen)
+        task = MicroTask.model_construct(
+            id="t-1",
+            instruction="return a value",
+            input={},
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "value": {"$ref": "https://169.254.169.254/latest/meta-data"}
+                },
+                "required": ["value"],
+            },
+            acceptance=[],
+            budget_tokens=None,
+            max_retries=0,
+        )
+
+        violations = deterministic_violations(task, {"value": 1})
+
+        assert violations
+        assert "$ref" in violations[0]
+        urlopen.assert_not_called()

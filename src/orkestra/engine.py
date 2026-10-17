@@ -57,6 +57,24 @@ STRONG_CALL_ATTEMPTS = 2
 """Strong-tier calls (arbiter reply, birlestirici) retry once on transport errors."""
 
 
+def _find_external_ref(node: Any) -> str | None:
+    """Return the first ``$ref`` that is not a local ``#/...`` fragment."""
+    if isinstance(node, dict):
+        ref = node.get("$ref")
+        if isinstance(ref, str) and not ref.startswith("#"):
+            return ref
+        for child in node.values():
+            found = _find_external_ref(child)
+            if found is not None:
+                return found
+    elif isinstance(node, list):
+        for child in node:
+            found = _find_external_ref(child)
+            if found is not None:
+                return found
+    return None
+
+
 def _first_invalid_schema(plan: SefPlan) -> str | None:
     """Return a description of the first piece whose output_schema is invalid.
 
@@ -69,6 +87,11 @@ def _first_invalid_schema(plan: SefPlan) -> str | None:
             jsonschema.Draft202012Validator.check_schema(piece.output_schema)
         except jsonschema.SchemaError as exc:
             return f"piece {piece.id!r} has an invalid output_schema: {exc.message}"
+        if (external := _find_external_ref(piece.output_schema)) is not None:
+            return (
+                f"piece {piece.id!r} has an external $ref {external!r}: "
+                "only local '#/...' $refs are allowed"
+            )
     return None
 
 
