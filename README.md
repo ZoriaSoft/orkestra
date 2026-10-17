@@ -131,8 +131,10 @@ Python 3.11+. Geliştirme için: `pip install -e ".[dev]"` ardından `pytest`, `
 export OPENAI_API_KEY="sk-..."
 orkestra providers add openai --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
 orkestra providers test openai
-orkestra models add hamal -p openai -t cheap --purpose micro-task --model-id gpt-5-mini
+orkestra models add beyin -p openai -t strong --model-id gpt-5 --cost-in 2.0 --cost-out 8.0
+orkestra models add hamal -p openai -t cheap --purpose micro-task --model-id gpt-5-mini --cost-in 0.10 --cost-out 0.40
 orkestra models list --tier cheap
+orkestra run "görevin" --budget 1.00
 ```
 
 Konfigürasyon `~/.orkestra/config.yaml`'da durur. **API anahtarları asla

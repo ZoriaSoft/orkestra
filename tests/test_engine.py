@@ -568,6 +568,75 @@ class TestBudget:
         assert report["result"] is None
         assert calls_for(client, "birlestirici") == []
 
+    def test_token_budget_crossed_only_by_synthesis_is_budget_exceeded(
+        self, registry: Registry
+    ) -> None:
+        # sef (20) + hamal (20) = 40 < 50 cap, so synthesis runs; its own
+        # 100 tokens push the total to 140 and must flip the status.
+        pieces = [PLAN_TWO["pieces"][0]]
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return {
+                    "content": plan_json(pieces),
+                    "prompt_tokens": 10,
+                    "completion_tokens": 10,
+                }
+            if role == "hamal":
+                return {
+                    "content": '{"value": 1}',
+                    "prompt_tokens": 10,
+                    "completion_tokens": 10,
+                }
+            return {
+                "content": "done",
+                "prompt_tokens": 100,
+                "completion_tokens": 0,
+            }
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client, token_budget=50).run("task")
+
+        assert calls_for(client, "birlestirici")
+        assert report["status"] == "budget_exceeded"
+        assert report["status"] != "ok"
+
+    def test_usd_budget_crossed_only_by_synthesis_is_budget_exceeded(
+        self, registry: Registry
+    ) -> None:
+        # sef + hamal cost $0.00005 each ($0.0001 total) < $0.001 cap, so
+        # synthesis runs; its 10k+10k tokens cost $0.05 and must flip status.
+        pieces = [PLAN_TWO["pieces"][0]]
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return {
+                    "content": plan_json(pieces),
+                    "prompt_tokens": 10,
+                    "completion_tokens": 10,
+                }
+            if role == "hamal":
+                return {
+                    "content": '{"value": 1}',
+                    "prompt_tokens": 10,
+                    "completion_tokens": 10,
+                }
+            return {
+                "content": "done",
+                "prompt_tokens": 10000,
+                "completion_tokens": 10000,
+            }
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client, budget_usd=0.001).run("task")
+
+        assert calls_for(client, "birlestirici")
+        assert report["usage"]["totals"]["cost_usd"] > 0.001
+        assert report["status"] == "budget_exceeded"
+        assert report["status"] != "ok"
+
     def test_usd_budget_requires_cost_hints(self, api_key_env: str) -> None:
         provider = ProviderConfig(
             name="p", base_url="http://127.0.0.1:1", api_key_env=api_key_env
@@ -977,3 +1046,241 @@ class TestCitationList:
         piece = report["pieces"][0]
         assert piece["status"] == "failed"
         assert "https://invented" in piece["attempts"][0]["reasons"][0]
+
+class TestExternalRefRejected:
+    """External $refs in output_schema are SSRF: reject at plan time."""
+
+    @pytest.mark.parametrize(
+        "bad_ref",
+        [
+            "https://169.254.169.254/latest/meta-data",
+            "http://127.0.0.1:8080/admin",
+            "file:///etc/passwd",
+            "other-schema.json",
+            "../secret.json",
+        ],
+    )
+    def test_external_ref_rejected_without_network(
+        self, registry: Registry, monkeypatch: pytest.MonkeyPatch, bad_ref: str
+    ) -> None:
+        from unittest import mock
+
+        urlopen = mock.Mock(side_effect=AssertionError("network fetch attempted"))
+        monkeypatch.setattr("urllib.request.urlopen", urlopen)
+        pieces = [
+            {
+                "id": "t-1",
+                "instruction": "return a value",
+                "input": {},
+                "output_schema": {
+                    "type": "object",
+                    "properties": {"value": {"$ref": bad_ref}},
+                    "required": ["value"],
+                },
+                "acceptance": [],
+            }
+        ]
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json(pieces)
+            if role == "hamal":
+                return '{"value": 1}'
+            return "done"
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client).run("task")
+
+        assert report["status"] == "failed"
+        assert calls_for(client, "hamal") == []
+        assert "external $ref" in report["errors"][0]
+        urlopen.assert_not_called()
+
+    def test_local_fragment_ref_still_allowed(
+        self, registry: Registry, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from unittest import mock
+
+        urlopen = mock.Mock(side_effect=AssertionError("network fetch attempted"))
+        monkeypatch.setattr("urllib.request.urlopen", urlopen)
+        pieces = [
+            {
+                "id": "t-1",
+                "instruction": "return a value",
+                "input": {},
+                "output_schema": {
+                    "type": "object",
+                    "properties": {"value": {"$ref": "#/$defs/num"}},
+                    "$defs": {"num": {"type": "number"}},
+                    "required": ["value"],
+                },
+                "acceptance": [],
+            }
+        ]
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json(pieces)
+            if role == "hamal":
+                return '{"value": 1}'
+            return "done"
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client).run("task")
+
+        assert report["status"] == "ok"
+        assert report["pieces"][0]["status"] == "passed"
+        urlopen.assert_not_called()
+
+    def test_validate_rejects_external_ref_without_network(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from unittest import mock
+
+        from orkestra.plan import MicroTask
+        from orkestra.validate import deterministic_violations
+
+        urlopen = mock.Mock(side_effect=AssertionError("network fetch attempted"))
+        monkeypatch.setattr("urllib.request.urlopen", urlopen)
+        task = MicroTask.model_construct(
+            id="t-1",
+            instruction="return a value",
+            input={},
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "value": {"$ref": "https://169.254.169.254/latest/meta-data"}
+                },
+                "required": ["value"],
+            },
+            acceptance=[],
+            budget_tokens=None,
+            max_retries=0,
+        )
+
+        violations = deterministic_violations(task, {"value": 1})
+
+        assert violations
+        assert "$ref" in violations[0]
+        urlopen.assert_not_called()
+
+class TestXFromInputPlanValidation:
+    """x-from-input must be a string on a top-level property only."""
+
+    def _run_with_schema(
+        self, registry: Registry, output_schema: dict[str, Any]
+    ) -> tuple[dict[str, Any], FakeChatClient]:
+        pieces = [
+            {
+                "id": "t-1",
+                "instruction": "summarize",
+                "input": {"urls": ["https://a", "https://b"]},
+                "output_schema": output_schema,
+                "acceptance": [],
+            }
+        ]
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json(pieces)
+            if role == "hamal":
+                return '{"kaynak": "https://a"}'
+            return "done"
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client).run("task")
+        return report, client
+
+    def test_list_value_rejected_at_plan_time(self, registry: Registry) -> None:
+        report, client = self._run_with_schema(
+            registry,
+            {
+                "type": "object",
+                "properties": {
+                    "kaynak": {"type": "string", "x-from-input": ["urls"]}
+                },
+                "required": ["kaynak"],
+            },
+        )
+
+        assert report["status"] == "failed"
+        assert calls_for(client, "hamal") == []
+        assert "x-from-input" in report["errors"][0]
+        assert "must be a string" in report["errors"][0]
+
+    def test_nested_in_items_rejected_at_plan_time(
+        self, registry: Registry
+    ) -> None:
+        report, client = self._run_with_schema(
+            registry,
+            {
+                "type": "object",
+                "properties": {
+                    "kaynaklar": {
+                        "type": "array",
+                        "items": {"type": "string", "x-from-input": "urls"},
+                    }
+                },
+                "required": ["kaynaklar"],
+            },
+        )
+
+        assert report["status"] == "failed"
+        assert calls_for(client, "hamal") == []
+        assert "x-from-input" in report["errors"][0]
+        assert "not supported" in report["errors"][0]
+
+    def test_nested_in_properties_rejected_at_plan_time(
+        self, registry: Registry
+    ) -> None:
+        report, client = self._run_with_schema(
+            registry,
+            {
+                "type": "object",
+                "properties": {
+                    "outer": {
+                        "type": "object",
+                        "properties": {
+                            "inner": {"type": "string", "x-from-input": "urls"}
+                        },
+                        "required": ["inner"],
+                    }
+                },
+                "required": ["outer"],
+            },
+        )
+
+        assert report["status"] == "failed"
+        assert calls_for(client, "hamal") == []
+        assert "x-from-input" in report["errors"][0]
+        assert "not supported" in report["errors"][0]
+
+    def test_validate_non_string_x_from_input_does_not_raise_type_error(
+        self,
+    ) -> None:
+        from orkestra.plan import MicroTask
+        from orkestra.validate import deterministic_violations
+
+        task = MicroTask.model_construct(
+            id="t-1",
+            instruction="summarize",
+            input={"urls": ["https://a"]},
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "kaynak": {"type": "string", "x-from-input": ["urls"]}
+                },
+                "required": ["kaynak"],
+            },
+            acceptance=[],
+            budget_tokens=None,
+            max_retries=0,
+        )
+
+        violations = deterministic_violations(task, {"kaynak": "https://a"})
+
+        assert violations
+        assert "x-from-input must be a string" in violations[0]

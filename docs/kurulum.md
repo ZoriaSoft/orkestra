@@ -1,9 +1,8 @@
 # Kurulum
 
 `orkestra`, OpenAI-uyumlu LLM sağlayıcılarını ve modellerini tek bir yerel
-kayıt defterinde (registry) toplayan bir Python CLI'ıdır. Bu kılavuz Faz 1
-kapsamındadır: provider + model yönetimi. Orkestrasyon motoru (şef → hamal →
-kalfa → birleştirici) Faz 2'de gelir.
+kayıt defterinde (registry) toplayan bir Python CLI'ıdır. Bu kılavuz
+provider + model yönetimi kapsamındadır.
 
 ## Gereksinimler
 

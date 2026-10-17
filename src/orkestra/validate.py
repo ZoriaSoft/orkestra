@@ -16,6 +16,8 @@ from __future__ import annotations
 from typing import Any
 
 import jsonschema
+from referencing import Registry, Resource
+from referencing.exceptions import Unresolvable
 
 from orkestra.plan import MicroTask
 
@@ -29,6 +31,21 @@ _MISSING = object()
 """Sentinel: distinguishes "no bad element" from a bad element that is None."""
 
 
+def _deny_remote_retrieve(uri: str) -> Resource[Any]:
+    """Refuse every retrieval: only local ``#/...`` refs may resolve.
+
+    jsonschema's default retrieve fetches http(s):// and file:// URIs via
+    urllib (SSRF via model-authored schemas). Local fragment refs resolve
+    against the root resource and never reach this callable; anything that
+    does is external by definition and is rejected without any I/O.
+    """
+    raise Unresolvable(ref=uri)
+
+
+_LOCAL_ONLY_REGISTRY: Registry[Any] = Registry(retrieve=_deny_remote_retrieve)
+"""referencing Registry that never performs network/file retrieval."""
+
+
 def deterministic_violations(task: MicroTask, output: Any) -> list[str]:
     """Return human-readable violations; empty list means stage-1 passed.
 
@@ -40,13 +57,20 @@ def deterministic_violations(task: MicroTask, output: Any) -> list[str]:
     if not isinstance(output, dict):
         return [f"output must be a JSON object, got {type(output).__name__}"]
 
-    validator = jsonschema.Draft202012Validator(task.output_schema)
-    schema_errors = [
-        f"schema: {'.'.join(str(p) for p in err.absolute_path) or '(root)'}: {err.message}"
-        for err in sorted(
-            validator.iter_errors(output), key=lambda e: list(e.absolute_path)
-        )
-    ]
+    validator = jsonschema.Draft202012Validator(
+        task.output_schema, registry=_LOCAL_ONLY_REGISTRY
+    )
+    try:
+        schema_errors = [
+            f"schema: {'.'.join(str(p) for p in err.absolute_path) or '(root)'}: {err.message}"
+            for err in sorted(
+                validator.iter_errors(output), key=lambda e: list(e.absolute_path)
+            )
+        ]
+    except Unresolvable as exc:
+        # External $ref slipped past plan checks: report it as a schema
+        # violation (retryable) instead of fetching it or crashing the run.
+        schema_errors = [f"schema: unresolvable $ref: {exc}"]
     violations.extend(schema_errors[:MAX_SCHEMA_VIOLATIONS])
     violations.extend(_citation_violations(task, output)[:MAX_CITATION_VIOLATIONS])
     return violations[:MAX_VIOLATIONS]
@@ -63,6 +87,14 @@ def _citation_violations(task: MicroTask, output: dict[str, Any]) -> list[str]:
             continue
         source_key = prop_schema.get("x-from-input")
         if source_key is None or prop not in output:
+            continue
+        if not isinstance(source_key, str):
+            # Plan validation rejects this, but a bypassed/hand-built task
+            # must not crash here: input.get(<list>) raises TypeError.
+            violations.append(
+                f"citation: {prop}: x-from-input must be a string naming "
+                f"an input field, got {type(source_key).__name__}"
+            )
             continue
         source = task.input.get(source_key)
         if not isinstance(source, list):

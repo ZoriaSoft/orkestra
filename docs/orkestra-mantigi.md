@@ -19,7 +19,7 @@ pahalı muhakemesi yalnız gerektiği yerde (bölme, hakemlik, sentez) harcanır
 
 | Rol | Kim | Girdi → Çıktı | Altın kural |
 |---|---|---|---|
-| **ŞEF** | `tier: strong` model | Görev → mikro-görev listesi (JSON) | Her parçanın doğruluğu **mekanik kontrol edilebilmeli**. "Araştır" değil, "şu 20 URL'deki fiyatları tabloya dök" yazar. |
+| **ŞEF** | `tier: strong` model | Görev → mikro-görev listesi (JSON) | Her parçanın doğruluğu **mekanik kontrol edilebilmeli**. "Araştır" değil, "içeriği verilen şu 20 ürün kaydındaki fiyatları tabloya dök" yazar. |
 | **HAMAL** | `tier: cheap` model havuzu | Mikro-görev → katı şemalı JSON | Muhakeme yasak: emin değilse uydurmaz, `"unknown"`/`null` yazar. Paralel çalışır, parça başına `budget_tokens` kotası olabilir. |
 | **KALFA** | Önce kod, sonra strong model | Worker çıktısı → `{pass, reasons[], fix_hint}` | 1. aşama deterministik: JSON mı, şema geçerli mi, alıntı input'ta var mı. 2. aşama (gri alan) strong modele sorulur. Kalan parça en fazla `max_retries` (vars. 2) kez tekrar eder, sonra **güçlü modele yükseltilir**. |
 | **BİRLEŞTİRİCİ** | `tier: strong` model | Doğrulanmış parçalar → nihai çıktı | Sadece **geçmiş** parçaları görür. Sentezdeki muhakeme onundur. |
@@ -108,8 +108,8 @@ ana kadarki kullanım/parçalar kaybolmaz.
 - Ucuz modelin hata modu "kendinden emin uydurma"dır. Ona muhakeme
   verirsen hatasını denetleyecek başka ucuz model gerekir — sonsuz regres.
 - Bunun yerine görev tanımı daralır: tek alan, tek çıktı şeması, tek iş.
-- "Bilmiyorum" meşru bir cevaptır (`"unknown"`); uydurmak ise kalfada
-  garantili yakalanır (şema + alıntı kontrolleri).
+- "Bilmiyorum" meşru bir cevaptır (`"unknown"`); uydurmaların bir kısmı
+  kalfadaki deterministik kontrollerle (şema + alıntı) yakalanabilir.
 - Gerçekten muhakeme gereken şey üç yerde kalır ve hepsi strong modelde:
   bölmek (şef), gri-alan hakemliği (kalfa aşama 2), sentez (birleştirici).
 
@@ -123,17 +123,19 @@ orkestra models add brain -p openai -t strong --model-id gpt-5 \
 orkestra models add mule  -p openai -t cheap  --model-id gpt-5-mini \
     --purpose micro-task --cost-in 0.10 --cost-out 0.40
 
-orkestra run "Şu üç ürün sayfasındaki fiyatları TL'ye çevirip tablo yap: ..." \
+orkestra run "Aşağıda içeriği verilen üç ürün kaydındaki fiyatları TL'ye çevirip tablo yap: [kayıt içerikleri]" \
     --budget 0.50 --max-parallel 4
 ```
 
-Senaryo akışı (örnek: 20 URL fiyat tablosu):
+Senaryo akışı (örnek: içeriği girdi olarak verilen 20 ürün kaydı → fiyat tablosu):
 
-1. Şef görevi 20 parçaya böler: `t-001..t-020`, her biri tek URL +
-   `output_schema {fiyat:number, kaynak:string(x-from-input: urls)}`.
+1. Şef görevi 20 parçaya böler: `t-001..t-020`, her biri tek ürün kaydının
+   içeriği `input` olarak verilmiş +
+   `output_schema {fiyat:number, kaynak:string(x-from-input: kayit_kimlikleri)}`.
+   Orkestra URL fetch etmez; işlenecek içerik görev girdisinde olmalıdır.
 2. Hamal havuzu parçaları paylaşır; her parça tek çağrıda JSON döner.
-3. Kalfa deterministik denetler: `kaynak` input URL'lerinden biri değilse
-   anında reddeder (`citation` ihlali) → retry.
+3. Kalfa deterministik denetler: `kaynak` input'taki kayıt kimliklerinden
+   biri değilse anında reddeder (`citation` ihlali) → retry.
 4. `t-007` iki kez kalırsa → strong modele yükseltilir, `escalated`
    olarak geçer.
 5. `t-013` her şeye rağmen kalırsa → `failed`; birleştirici çıktıda
