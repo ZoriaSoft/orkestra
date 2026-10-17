@@ -568,6 +568,75 @@ class TestBudget:
         assert report["result"] is None
         assert calls_for(client, "birlestirici") == []
 
+    def test_token_budget_crossed_only_by_synthesis_is_budget_exceeded(
+        self, registry: Registry
+    ) -> None:
+        # sef (20) + hamal (20) = 40 < 50 cap, so synthesis runs; its own
+        # 100 tokens push the total to 140 and must flip the status.
+        pieces = [PLAN_TWO["pieces"][0]]
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return {
+                    "content": plan_json(pieces),
+                    "prompt_tokens": 10,
+                    "completion_tokens": 10,
+                }
+            if role == "hamal":
+                return {
+                    "content": '{"value": 1}',
+                    "prompt_tokens": 10,
+                    "completion_tokens": 10,
+                }
+            return {
+                "content": "done",
+                "prompt_tokens": 100,
+                "completion_tokens": 0,
+            }
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client, token_budget=50).run("task")
+
+        assert calls_for(client, "birlestirici")
+        assert report["status"] == "budget_exceeded"
+        assert report["status"] != "ok"
+
+    def test_usd_budget_crossed_only_by_synthesis_is_budget_exceeded(
+        self, registry: Registry
+    ) -> None:
+        # sef + hamal cost $0.00005 each ($0.0001 total) < $0.001 cap, so
+        # synthesis runs; its 10k+10k tokens cost $0.05 and must flip status.
+        pieces = [PLAN_TWO["pieces"][0]]
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return {
+                    "content": plan_json(pieces),
+                    "prompt_tokens": 10,
+                    "completion_tokens": 10,
+                }
+            if role == "hamal":
+                return {
+                    "content": '{"value": 1}',
+                    "prompt_tokens": 10,
+                    "completion_tokens": 10,
+                }
+            return {
+                "content": "done",
+                "prompt_tokens": 10000,
+                "completion_tokens": 10000,
+            }
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client, budget_usd=0.001).run("task")
+
+        assert calls_for(client, "birlestirici")
+        assert report["usage"]["totals"]["cost_usd"] > 0.001
+        assert report["status"] == "budget_exceeded"
+        assert report["status"] != "ok"
+
     def test_usd_budget_requires_cost_hints(self, api_key_env: str) -> None:
         provider = ProviderConfig(
             name="p", base_url="http://127.0.0.1:1", api_key_env=api_key_env

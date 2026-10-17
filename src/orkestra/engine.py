@@ -181,6 +181,9 @@ class Orchestra:
                 budget_hit = True
             except EngineError as exc:
                 errors.append(str(exc))
+            # Synthesis is itself a metered call: it may be the call that
+            # crosses the token/USD cap, so re-check after it is recorded.
+            budget_hit = budget_hit or self._budget_hit(ledger)
 
         if budget_hit:
             status = "budget_exceeded"
