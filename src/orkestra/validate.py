@@ -88,6 +88,14 @@ def _citation_violations(task: MicroTask, output: dict[str, Any]) -> list[str]:
         source_key = prop_schema.get("x-from-input")
         if source_key is None or prop not in output:
             continue
+        if not isinstance(source_key, str):
+            # Plan validation rejects this, but a bypassed/hand-built task
+            # must not crash here: input.get(<list>) raises TypeError.
+            violations.append(
+                f"citation: {prop}: x-from-input must be a string naming "
+                f"an input field, got {type(source_key).__name__}"
+            )
+            continue
         source = task.input.get(source_key)
         if not isinstance(source, list):
             violations.append(

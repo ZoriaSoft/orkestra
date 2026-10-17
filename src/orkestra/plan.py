@@ -18,6 +18,53 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+def _check_x_from_input(
+    node: Any, path: str, *, is_top_level_property: bool
+) -> None:
+    """Reject non-string or nested ``x-from-input`` anywhere in a schema.
+
+    Only a direct property of the root ``properties`` map is supported:
+    the kalfa citation check reads exactly that level. A non-string value
+    or a marker buried in ``items``/nested ``properties``/combinators would
+    otherwise be silently ignored (fabricated sources pass) or crash the
+    citation check with a TypeError on ``input.get(<unhashable>)``.
+    """
+    if isinstance(node, dict):
+        if "x-from-input" in node:
+            if not is_top_level_property:
+                raise ValueError(
+                    "x-from-input is only supported on top-level properties "
+                    f"of output_schema; nested use at {path} is not supported"
+                )
+            source = node["x-from-input"]
+            if not isinstance(source, str):
+                raise ValueError(
+                    f"x-from-input at {path} must be a string naming an "
+                    f"input field, got {type(source).__name__}: {source!r}"
+                )
+        for key, child in node.items():
+            if (
+                key == "properties"
+                and path == "output_schema"
+                and isinstance(child, dict)
+            ):
+                for prop, prop_schema in child.items():
+                    _check_x_from_input(
+                        prop_schema,
+                        f"{path}.properties.{prop}",
+                        is_top_level_property=True,
+                    )
+            else:
+                _check_x_from_input(
+                    child, f"{path}.{key}", is_top_level_property=False
+                )
+    elif isinstance(node, list):
+        for index, child in enumerate(node):
+            _check_x_from_input(
+                child, f"{path}[{index}]", is_top_level_property=False
+            )
+
+
 class MicroTask(BaseModel):
     """One muhakemesiz micro-task handed to a hamal.
 
@@ -56,6 +103,7 @@ class MicroTask(BaseModel):
                 'output_schema must declare "type": "object" '
                 "(worker replies are JSON objects)"
             )
+        _check_x_from_input(value, "output_schema", is_top_level_property=False)
         return value
 
 

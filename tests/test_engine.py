@@ -1165,3 +1165,122 @@ class TestExternalRefRejected:
         assert violations
         assert "$ref" in violations[0]
         urlopen.assert_not_called()
+
+class TestXFromInputPlanValidation:
+    """x-from-input must be a string on a top-level property only."""
+
+    def _run_with_schema(
+        self, registry: Registry, output_schema: dict[str, Any]
+    ) -> tuple[dict[str, Any], FakeChatClient]:
+        pieces = [
+            {
+                "id": "t-1",
+                "instruction": "summarize",
+                "input": {"urls": ["https://a", "https://b"]},
+                "output_schema": output_schema,
+                "acceptance": [],
+            }
+        ]
+
+        def handler(resolved, messages):
+            role = role_of(messages)
+            if role == "sef":
+                return plan_json(pieces)
+            if role == "hamal":
+                return '{"kaynak": "https://a"}'
+            return "done"
+
+        client = FakeChatClient(handler)
+        report = make_orchestra(registry, client).run("task")
+        return report, client
+
+    def test_list_value_rejected_at_plan_time(self, registry: Registry) -> None:
+        report, client = self._run_with_schema(
+            registry,
+            {
+                "type": "object",
+                "properties": {
+                    "kaynak": {"type": "string", "x-from-input": ["urls"]}
+                },
+                "required": ["kaynak"],
+            },
+        )
+
+        assert report["status"] == "failed"
+        assert calls_for(client, "hamal") == []
+        assert "x-from-input" in report["errors"][0]
+        assert "must be a string" in report["errors"][0]
+
+    def test_nested_in_items_rejected_at_plan_time(
+        self, registry: Registry
+    ) -> None:
+        report, client = self._run_with_schema(
+            registry,
+            {
+                "type": "object",
+                "properties": {
+                    "kaynaklar": {
+                        "type": "array",
+                        "items": {"type": "string", "x-from-input": "urls"},
+                    }
+                },
+                "required": ["kaynaklar"],
+            },
+        )
+
+        assert report["status"] == "failed"
+        assert calls_for(client, "hamal") == []
+        assert "x-from-input" in report["errors"][0]
+        assert "not supported" in report["errors"][0]
+
+    def test_nested_in_properties_rejected_at_plan_time(
+        self, registry: Registry
+    ) -> None:
+        report, client = self._run_with_schema(
+            registry,
+            {
+                "type": "object",
+                "properties": {
+                    "outer": {
+                        "type": "object",
+                        "properties": {
+                            "inner": {"type": "string", "x-from-input": "urls"}
+                        },
+                        "required": ["inner"],
+                    }
+                },
+                "required": ["outer"],
+            },
+        )
+
+        assert report["status"] == "failed"
+        assert calls_for(client, "hamal") == []
+        assert "x-from-input" in report["errors"][0]
+        assert "not supported" in report["errors"][0]
+
+    def test_validate_non_string_x_from_input_does_not_raise_type_error(
+        self,
+    ) -> None:
+        from orkestra.plan import MicroTask
+        from orkestra.validate import deterministic_violations
+
+        task = MicroTask.model_construct(
+            id="t-1",
+            instruction="summarize",
+            input={"urls": ["https://a"]},
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "kaynak": {"type": "string", "x-from-input": ["urls"]}
+                },
+                "required": ["kaynak"],
+            },
+            acceptance=[],
+            budget_tokens=None,
+            max_retries=0,
+        )
+
+        violations = deterministic_violations(task, {"kaynak": "https://a"})
+
+        assert violations
+        assert "x-from-input must be a string" in violations[0]
